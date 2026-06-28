@@ -1,0 +1,49 @@
+=== CHROME WEB STORE LISTING ===
+
+## Titulo
+ProOnboarding - Guias interactivas con IA para cualquier web
+
+## Descripcion corta (132 chars max)
+Analiza cualquier pagina con IA y genera un recorrido interactivo paso a paso con audio y resaltado visual.
+
+## Descripcion larga
+
+ProOnboarding es un panel lateral que analiza la pagina que estas viendo usando inteligencia artificial y crea un recorrido interactivo guiado por audio.
+
+**Como funciona:**
+
+1. Abre el panel lateral haciendo clic en el icono de ProOnboarding.
+2. Pulsa "Esta pagina" para analizar el contenido actual.
+3. La IA identifica la plataforma, los elementos clave y genera un resumen.
+4. Pulsa "Iniciar recorrido" para comenzar la guia paso a paso.
+5. Cada paso resalta el elemento en la pagina y reproduce un audio explicativo.
+6. Navega entre pasos con "Atras" y "Siguiente".
+
+**Caracteristicas:**
+
+- Resumen automatico de cualquier pagina web.
+- Recorrido interactivo con resaltado visual de elementos.
+- Audio explicativo paso a paso usando Web Speech API.
+- Soporte multidioma: espanol, ingles, portugues, frances.
+- Cache de analisis: evita re-procesar paginas ya analizadas.
+- URL del API configurable (por defecto apunta al backend en la nube).
+- No requiere registro ni inicio de sesion.
+
+**Casos de uso:**
+
+- Ayuda en linea para aplicaciones web complejas (CRMs, ERPs, dashboards).
+- Onboarding de usuarios en plataformas SaaS.
+- Documentacion interactiva de paginas web.
+- Asistencia para usuarios no tecnicos.
+
+**Privacidad:**
+
+La extension solo envia el contenido de la pagina cuando tu presionas "Esta pagina". No recopila informacion personal, no usa rastreadores, no vende datos. Lee la politica de privacidad completa en el repositorio.
+
+## Categoria
+Productivity
+
+## Idioma
+Spanish (default), English, Portuguese, French
+
+**NOTA:** Reemplaza las capturas de pantalla con las imagenes que tomaste. Deben ser de 1280x800 o 640x400.
