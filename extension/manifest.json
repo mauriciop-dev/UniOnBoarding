@@ -17,8 +17,7 @@
     "sidePanel",
     "activeTab",
     "scripting",
-    "storage",
-    "aiLanguageModel"
+    "storage"
   ],
   "host_permissions": [
     "https://uni-on-boarding-idcs.vercel.app/*"

@@ -1,20 +1,9 @@
 // Side panel: UI principal de ProOnboarding.
-// Flujo:
-//   1. Usuario hace clic en "Esta pagina".
-//   2. Pedimos al content script del tab activo el HTML limpio.
-//   3. POST al API configurado (default: produccion en Vercel).
-//   4. Mostramos resumen + recorrido con TTS y resaltado visual.
 
-import { analyzePageWithFallback, getNanoAvailability } from './ai-engine.js';
+import { analyzePageWithFallback } from './ai-engine.js';
 
 const DEFAULT_API_URL = 'https://uni-on-boarding-idcs.vercel.app/api/analyze-page';
 const STORAGE_KEYS = { apiUrl: 'proob.apiUrl', lang: 'proob.lang' };
-
-// Etiquetas visuales para cada motor de IA
-const ENGINE_LABELS = {
-  nano: { text: '⚡ Local · Gemini Nano', cls: 'engine-nano' },
-  cloud: { text: '☁️ Cloud · API Vercel', cls: 'engine-cloud' },
-};
 
 const $ = (id) => document.getElementById(id);
 
@@ -40,7 +29,6 @@ const state = {
   isSpeaking: false
 };
 
-// ---------- Vistas ----------
 function showView(name) {
   Object.values(views).forEach(v => v.classList.remove('active'));
   views[name].classList.add('active');
@@ -48,7 +36,6 @@ function showView(name) {
 
 function setLoadingText(text) { $('loading-text').textContent = text; }
 
-// ---------- Storage ----------
 async function loadSettings() {
   const stored = await chrome.storage.local.get([STORAGE_KEYS.apiUrl, STORAGE_KEYS.lang]);
   state.apiUrl = stored[STORAGE_KEYS.apiUrl] || DEFAULT_API_URL;
@@ -66,7 +53,6 @@ async function saveSettings() {
   $('settings-modal').hidden = true;
 }
 
-// ---------- Comunicacion con el content script ----------
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab;
@@ -105,35 +91,6 @@ async function clearHighlightOnPage() {
   } catch (_) { /* ignore */ }
 }
 
-// ---------- Badge de motor ----------
-function updateEngineBadge(engine) {
-  const badge = $('badge-engine');
-  if (!badge) return;
-  const label = ENGINE_LABELS[engine] || ENGINE_LABELS.cloud;
-  badge.textContent = label.text;
-  badge.className = `badge-engine ${label.cls}`;
-  badge.hidden = false;
-}
-
-// Detecta y muestra el motor disponible en la vista idle
-async function showEngineStatus() {
-  const nano = await getNanoAvailability();
-  const statusEl = $('engine-status');
-  if (!statusEl) return;
-  if (nano === 'readily') {
-    statusEl.textContent = '⚡ Gemini Nano (listo)';
-    statusEl.className = 'engine-status-pill engine-nano';
-  } else if (nano === 'after-download') {
-    statusEl.textContent = '⚡ Gemini Nano (requiere descarga)';
-    statusEl.className = 'engine-status-pill engine-nano';
-  } else {
-    statusEl.textContent = '☁️ API cloud (Nano no disponible)';
-    statusEl.className = 'engine-status-pill engine-cloud';
-  }
-  statusEl.hidden = false;
-}
-
-// ---------- TTS (Web Speech API) ----------
 function pickSpanishVoice() {
   if (!('speechSynthesis' in window)) return null;
   const voices = window.speechSynthesis.getVoices();
@@ -145,7 +102,7 @@ function pickSpanishVoice() {
 function speak(text, onEnd) {
   stopSpeaking();
   if (!('speechSynthesis' in window) || !text) {
-    onEnd && onEnd();
+    onEnd?.();
     return;
   }
   const u = new SpeechSynthesisUtterance(text);
@@ -157,12 +114,12 @@ function speak(text, onEnd) {
   u.onend = () => {
     state.isSpeaking = false;
     updateSpeakButton();
-    onEnd && onEnd();
+    onEnd?.();
   };
   u.onerror = () => {
     state.isSpeaking = false;
     updateSpeakButton();
-    onEnd && onEnd();
+    onEnd?.();
   };
   state.speech = u;
   state.isSpeaking = true;
@@ -181,7 +138,6 @@ function updateSpeakButton() {
   if (label) label.textContent = state.isSpeaking ? 'Pausar' : 'Reproducir';
 }
 
-// ---------- Render: Resumen ----------
 function renderSummary(data, meta) {
   const pa = data.page_analysis || {};
   $('platform-name').textContent = pa.detected_platform_name || 'Pagina analizada';
@@ -193,8 +149,7 @@ function renderSummary(data, meta) {
   showView('summary');
 }
 
-// ---------- Render: Tour ----------
-function renderTourStep(index) {
+async function renderTourStep(index) {
   const step = state.tourSteps[index];
   if (!step) return;
   state.currentStep = index;
@@ -211,8 +166,11 @@ function renderTourStep(index) {
   else if (step.action_type === 'input_required') hint.textContent = 'Escribe en el campo resaltado para continuar.';
   else hint.textContent = '';
 
-  // Highlight + audio
-  highlightOnPage(step.element_selector, step.action_type).catch(() => {});
+  // Esperar highlight visual antes de hablar
+  const hl = await highlightOnPage(step.element_selector, step.action_type).catch(() => ({ ok: false }));
+  if (!hl.ok) {
+    hint.textContent = 'No se pudo resaltar el elemento en pantalla.';
+  }
   if (step.audio_script) speak(step.audio_script);
 }
 
@@ -234,10 +192,8 @@ async function exitTour() {
   showView('summary');
 }
 
-// ---------- Acciones principales ----------
 const STATUS_MESSAGES = {
-  nano_loading: 'Iniciando Gemini Nano (motor local)...',
-  cloud_loading: 'Usando API cloud (Nano no disponible o falló)...',
+  cloud_loading: 'Consultando API cloud...',
 };
 
 async function analyzeThisPage() {
@@ -261,7 +217,6 @@ async function analyzeThisPage() {
       apiUrl: state.apiUrl,
       onStatus: (s) => setLoadingText(STATUS_MESSAGES[s] || 'Consultando la IA...'),
     });
-    updateEngineBadge(meta.engine);
     renderSummary(data, { ...data._meta, ...meta });
   } catch (err) {
     $('error-text').textContent = err.message || String(err);
@@ -277,7 +232,6 @@ function startTour() {
   renderTourStep(0);
 }
 
-// ---------- Wire-up ----------
 function wire() {
   $('analyze-btn').addEventListener('click', analyzeThisPage);
   $('start-tour-btn').addEventListener('click', startTour);
@@ -309,9 +263,8 @@ function wire() {
     if (e.target === $('settings-modal')) $('settings-modal').hidden = true;
   });
 
-  // Carga de voces en algunos navegadores es async.
   if ('speechSynthesis' in window) {
-    window.speechSynthesis.onvoiceschanged = () => { /* recalcular cuando esten listas */ };
+    window.speechSynthesis.onvoiceschanged = () => { /* voces cargadas */ };
   }
 }
 
@@ -319,6 +272,4 @@ function wire() {
   await loadSettings();
   wire();
   showView('idle');
-  // Detecta el motor disponible y lo muestra en la vista inicial
-  showEngineStatus().catch(() => {});
 })();
