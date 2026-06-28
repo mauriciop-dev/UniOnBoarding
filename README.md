@@ -1,6 +1,6 @@
 # ProOnboarding API
 
-Backend serverless para la extensión Chrome **ProOnboarding**. Recibe un fragmento de HTML simplificado, lo envía a una cadena de proveedores de IA con failover automático (Gemini → Groq → DeepSeek), guarda el resultado en caché en **InsForge** y devuelve un JSON estructurado con el análisis de la página y un recorrido interactivo de onboarding.
+Backend serverless para la extensión Chrome **ProOnboarding**. Recibe un fragmento de HTML simplificado, lo envía a una cadena de proveedores de IA con failover automático (Groq → Gemini → DeepSeek), guarda el resultado en caché en **InsForge** y devuelve un JSON estructurado con el análisis de la página y un recorrido interactivo de onboarding.
 
 ---
 
@@ -36,10 +36,10 @@ Backend serverless para la extensión Chrome **ProOnboarding**. Recibe un fragme
       "action_type": "highlight"
     }
   ],
-  "_meta": {
+    "_meta": {
     "cached": false,
     "dom_hash": "...",
-    "provider": "gemini",
+    "provider": "groq",
     "elapsed_ms": 2300,
     "attempts": []
   }
@@ -63,9 +63,9 @@ Extensión Chrome
        │                                ▲
        │                                │
        └──► AI provider chain ◄─────────┘
-              1. Gemini 1.5 Flash
-              2. Groq (llama-3.1-70b)
-              3. DeepSeek Chat
+               1. Groq (llama-3.3-70b-versatile)
+               2. Gemini 2.0 Flash
+               3. DeepSeek Chat
               (si uno falla, salta al siguiente)
 ```
 
@@ -154,7 +154,7 @@ proonboarding-api/
 │   └── health.js           ← healthcheck con estado de providers e InsForge
 ├── lib/
 │   ├── prompt-template.js  ← prompt validado para todos los providers
-│   ├── ai-provider.js      ← cadena Gemini → Groq → DeepSeek con fallback
+│   ├── ai-provider.js      ← cadena Groq → Gemini → DeepSeek con fallback
 │   └── insforge-client.js  ← cliente REST para InsForge (cache)
 ├── insforge-schema.sql     ← SQL para crear la tabla page_analyses
 ├── scripts/

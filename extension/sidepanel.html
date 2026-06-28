@@ -28,6 +28,7 @@
           <span class="dot"></span>
           Esta pagina
         </button>
+        <div id="engine-status" class="engine-status-pill" hidden></div>
         <div id="page-meta" class="meta"></div>
       </section>
 
@@ -35,12 +36,15 @@
       <section id="view-loading" class="view">
         <div class="spinner"></div>
         <p id="loading-text">Extrayendo DOM y consultando la IA...</p>
-        <p class="hint">Esto puede tardar entre 2 y 10 segundos la primera vez.</p>
+        <p class="hint">Primera vez con Gemini Nano puede tardar hasta 2 min (descarga del modelo).</p>
       </section>
 
       <!-- Vista resumen -->
       <section id="view-summary" class="view">
-        <div class="badge" id="badge-cached" hidden>Cache</div>
+        <div class="badges-row">
+          <div class="badge" id="badge-cached" hidden>Cache</div>
+          <div class="badge-engine" id="badge-engine" hidden></div>
+        </div>
         <h2 id="platform-name">Cargando...</h2>
         <p id="summary-text" class="summary"></p>
         <div class="actions">

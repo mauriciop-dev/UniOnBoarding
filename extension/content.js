@@ -13,7 +13,7 @@
   function isHidden(el) {
     if (!el || el.nodeType !== 1) return false;
     const style = window.getComputedStyle(el);
-    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return true;
+    if (style.display === 'none' || style.visibility === 'hidden' || parseFloat(style.opacity) === 0) return true;
     if (el.hasAttribute('hidden') || el.getAttribute('aria-hidden') === 'true') return true;
     return false;
   }

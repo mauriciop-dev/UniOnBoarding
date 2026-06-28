@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { analyzeWithFallback, listProvidersStatus } from '../lib/ai-provider.js';
+import { analyzeWithFallback } from '../lib/ai-provider.js';
 import { getCachedAnalysis, storeAnalysis } from '../lib/insforge-client.js';
 
 const MAX_HTML_LENGTH = 30000;
@@ -43,7 +43,7 @@ export default async function handler(req, res) {
       domHash: finalHash,
       lang,
       responseJson: result
-    }).catch(() => {});
+    }).catch(err => console.warn('[cache] storeAnalysis falló:', err.message));
 
     return res.status(200).json({
       ...result,

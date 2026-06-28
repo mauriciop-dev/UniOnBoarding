@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS public.page_analyses (
   dom_hash text NOT NULL,
   lang text NOT NULL DEFAULT 'es',
   response_json jsonb NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (dom_hash, lang)
 );
 
 CREATE INDEX IF NOT EXISTS idx_page_analyses_hash_lang

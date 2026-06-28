@@ -1,6 +1,6 @@
 {
   "name": "proonboarding-api",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "description": "Backend API for ProOnboarding Chrome Extension. Receives cleaned DOM and returns a structured onboarding tour with multi-provider AI fallback (Gemini -> Groq -> DeepSeek) and InsForge caching.",
   "main": "api/analyze-page.js",
   "type": "module",

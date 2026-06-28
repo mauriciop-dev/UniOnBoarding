@@ -5,8 +5,16 @@
 //   3. POST al API configurado (default: produccion en Vercel).
 //   4. Mostramos resumen + recorrido con TTS y resaltado visual.
 
+import { analyzePageWithFallback, getNanoAvailability } from './ai-engine.js';
+
 const DEFAULT_API_URL = 'https://uni-on-boarding-idcs.vercel.app/api/analyze-page';
 const STORAGE_KEYS = { apiUrl: 'proob.apiUrl', lang: 'proob.lang' };
+
+// Etiquetas visuales para cada motor de IA
+const ENGINE_LABELS = {
+  nano: { text: '⚡ Local · Gemini Nano', cls: 'engine-nano' },
+  cloud: { text: '☁️ Cloud · API Vercel', cls: 'engine-cloud' },
+};
 
 const $ = (id) => document.getElementById(id);
 
@@ -67,8 +75,12 @@ async function getActiveTab() {
 async function extractFromPage() {
   const tab = await getActiveTab();
   if (!tab?.id) throw new Error('No se encontro una pestana activa.');
+  const EXTRACT_TIMEOUT = 10000;
   try {
-    const res = await chrome.tabs.sendMessage(tab.id, { type: 'PROOB_EXTRACT' });
+    const res = await Promise.race([
+      chrome.tabs.sendMessage(tab.id, { type: 'PROOB_EXTRACT' }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Tiempo de espera agotado')), EXTRACT_TIMEOUT)),
+    ]);
     if (!res?.ok) throw new Error(res?.error || 'No se pudo extraer la pagina.');
     return res;
   } catch (e) {
@@ -93,19 +105,32 @@ async function clearHighlightOnPage() {
   } catch (_) { /* ignore */ }
 }
 
-// ---------- API ----------
-async function analyzePage({ url, html, lang, dom_hash }) {
-  const res = await fetch(state.apiUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url, html_cleaned: html, lang, dom_hash })
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const detail = data.detail || data.error || `HTTP ${res.status}`;
-    throw new Error(detail);
+// ---------- Badge de motor ----------
+function updateEngineBadge(engine) {
+  const badge = $('badge-engine');
+  if (!badge) return;
+  const label = ENGINE_LABELS[engine] || ENGINE_LABELS.cloud;
+  badge.textContent = label.text;
+  badge.className = `badge-engine ${label.cls}`;
+  badge.hidden = false;
+}
+
+// Detecta y muestra el motor disponible en la vista idle
+async function showEngineStatus() {
+  const nano = await getNanoAvailability();
+  const statusEl = $('engine-status');
+  if (!statusEl) return;
+  if (nano === 'readily') {
+    statusEl.textContent = '⚡ Gemini Nano (listo)';
+    statusEl.className = 'engine-status-pill engine-nano';
+  } else if (nano === 'after-download') {
+    statusEl.textContent = '⚡ Gemini Nano (requiere descarga)';
+    statusEl.className = 'engine-status-pill engine-nano';
+  } else {
+    statusEl.textContent = '☁️ API cloud (Nano no disponible)';
+    statusEl.className = 'engine-status-pill engine-cloud';
   }
-  return data;
+  statusEl.hidden = false;
 }
 
 // ---------- TTS (Web Speech API) ----------
@@ -210,6 +235,11 @@ async function exitTour() {
 }
 
 // ---------- Acciones principales ----------
+const STATUS_MESSAGES = {
+  nano_loading: 'Iniciando Gemini Nano (motor local)...',
+  cloud_loading: 'Usando API cloud (Nano no disponible o falló)...',
+};
+
 async function analyzeThisPage() {
   try {
     $('analyze-btn').disabled = true;
@@ -223,14 +253,16 @@ async function analyzeThisPage() {
 
     $('page-meta').textContent = `${state.pageTitle} - ${state.pageUrl}`;
 
-    setLoadingText('Consultando la IA (puede tardar unos segundos)...');
-    const data = await analyzePage({
+    const { data, meta } = await analyzePageWithFallback({
       url: state.pageUrl,
       html: state.pageHtml,
       lang: state.lang,
-      dom_hash: state.domHash
+      dom_hash: state.domHash,
+      apiUrl: state.apiUrl,
+      onStatus: (s) => setLoadingText(STATUS_MESSAGES[s] || 'Consultando la IA...'),
     });
-    renderSummary(data, data._meta || {});
+    updateEngineBadge(meta.engine);
+    renderSummary(data, { ...data._meta, ...meta });
   } catch (err) {
     $('error-text').textContent = err.message || String(err);
     showView('error');
@@ -287,4 +319,6 @@ function wire() {
   await loadSettings();
   wire();
   showView('idle');
+  // Detecta el motor disponible y lo muestra en la vista inicial
+  showEngineStatus().catch(() => {});
 })();

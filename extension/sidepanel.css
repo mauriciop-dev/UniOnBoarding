@@ -148,6 +148,58 @@ button.link {
   font-weight: 600;
 }
 
+/* Fila de badges en la vista resumen */
+.badges-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Badge del motor activo (en vista resumen) */
+.badge-engine {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.badge-engine.engine-nano {
+  background: linear-gradient(90deg, #059669, #10b981);
+  color: white;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+.badge-engine.engine-cloud {
+  background: linear-gradient(90deg, #1d4ed8, #3b82f6);
+  color: white;
+}
+
+/* Pill de estado del motor en la vista idle */
+.engine-status-pill {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  margin-top: -4px;
+}
+.engine-status-pill.engine-nano {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #34d399;
+}
+.engine-status-pill.engine-cloud {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.35);
+  color: #60a5fa;
+}
+
+
 .summary {
   line-height: 1.55;
   color: var(--text);

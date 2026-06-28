@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "ProDig AI Local Engine",
+  "version": "1.0",
+  "description": "Procesamiento local con Gemini Nano",
+  "permissions": [
+    "aiLanguageModel"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}
