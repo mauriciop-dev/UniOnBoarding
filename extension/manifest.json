@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ProOnboarding",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Onboarding universal para cualquier web: explica la pagina y te guia paso a paso con audio y resaltado visual.",
   "action": {
     "default_title": "Abrir ProOnboarding"
