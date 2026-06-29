@@ -1,21 +1,19 @@
-// Service Worker: inyecta content script y abre el side panel.
-chrome.action.onClicked.addListener(async (tab) => {
+// Service Worker: abre el side panel e inyecta el content script.
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.sidePanel?.setOptions({ enabled: true }).catch(() => {});
+});
+
+chrome.action.onClicked.addListener((tab) => {
   if (!tab?.id) return;
 
-  try {
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['content.js']
-    });
-    await chrome.scripting.insertCSS({
-      target: { tabId: tab.id },
-      files: ['content.css']
-    });
-  } catch (_) {
-    // Puede fallar en paginas restringidas (chrome://, etc.)
-  }
+  chrome.sidePanel?.open({ tabId: tab.id }).catch(() => {});
 
-  if (chrome.sidePanel) {
-    await chrome.sidePanel.open({ tabId: tab.id });
-  }
+  chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    files: ['content.js']
+  }).catch(() => {});
+  chrome.scripting.insertCSS({
+    target: { tabId: tab.id },
+    files: ['content.css']
+  }).catch(() => {});
 });
