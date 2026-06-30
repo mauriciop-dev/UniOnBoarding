@@ -61,17 +61,6 @@ async function getActiveTab() {
 async function extractFromPage() {
   const tab = await getActiveTab();
   if (!tab?.id) throw new Error('No se encontro una pestana activa.');
-  // Inyectar content script si no esta presente (ej. tras recargar la pagina)
-  chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    files: ['content.js']
-  }).catch(() => {});
-  chrome.scripting.insertCSS({
-    target: { tabId: tab.id },
-    files: ['content.css']
-  }).catch(() => {});
-  // Pequena pausa para que la inyeccion termine
-  await new Promise(r => setTimeout(r, 100));
   const EXTRACT_TIMEOUT = 10000;
   try {
     const res = await Promise.race([
