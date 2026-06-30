@@ -58,36 +58,26 @@ async function getActiveTab() {
   return tab;
 }
 
-async function injectContentScript(tabId) {
-  await chrome.scripting.executeScript({
-    target: { tabId },
-    files: ['content.js']
-  });
-  await chrome.scripting.insertCSS({
-    target: { tabId },
-    files: ['content.css']
-  });
-  // Esperar a que el script se cargue y registre el listener
+async function ensureContentScript(tabId) {
+  const res = await chrome.runtime.sendMessage({ type: 'PROOB_INJECT_CS', tabId });
+  if (!res?.ok) throw new Error('No se pudo inyectar el script en la pagina');
   await new Promise(r => setTimeout(r, 150));
 }
 
 async function extractFromPage() {
   const tab = await getActiveTab();
   if (!tab?.id) throw new Error('No se encontro una pestana activa.');
-  const EXTRACT_TIMEOUT = 10000;
   try {
     const res = await chrome.tabs.sendMessage(tab.id, { type: 'PROOB_EXTRACT' });
     if (res?.ok) return res;
     throw new Error(res?.error || 'Error desconocido');
   } catch (e) {
-    // Si falla, el content script puede no estar inyectado (navegacion, recarga)
     try {
-      await injectContentScript(tab.id);
+      await ensureContentScript(tab.id);
       const res = await chrome.tabs.sendMessage(tab.id, { type: 'PROOB_EXTRACT' });
       if (!res?.ok) throw new Error(res?.error || 'Error desconocido');
       return res;
     } catch (inner) {
-      if (inner.message?.includes('agotado') || inner.message?.includes('timeout')) throw inner;
       throw new Error('No se pudo acceder al contenido de la pagina. Es posible que sea una pagina restringida (chrome://, pdf, etc). Recarga e intenta de nuevo.');
     }
   }
