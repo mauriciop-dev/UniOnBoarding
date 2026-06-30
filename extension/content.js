@@ -7,6 +7,10 @@
   const KEEP_ATTRS = new Set([
     'id', 'class', 'name', 'href', 'type', 'placeholder', 'value', 'role', 'aria-label', 'title', 'alt', 'for', 'src'
   ]);
+
+  function keepAttr(name) {
+    return KEEP_ATTRS.has(name) || name.startsWith('data-');
+  }
   const MAX_DEPTH = 25;
   const MAX_TEXT = 220;
 
@@ -21,7 +25,7 @@
   function cleanAttrs(el) {
     const out = [];
     for (const attr of el.attributes) {
-      if (!KEEP_ATTRS.has(attr.name)) continue;
+      if (!keepAttr(attr.name)) continue;
       if (attr.name === 'class' && attr.value.length > 120) continue;
       if ((attr.name === 'value' || attr.name === 'placeholder') && attr.value.length > 80) continue;
       out.push(`${attr.name}="${attr.value.replace(/"/g, '&quot;')}"`);
@@ -67,6 +71,7 @@
 
   let currentHighlighted = null;
   let pendingResolve = null;
+  let currentHandlers = [];
 
   function findElement(selector) {
     if (!selector) return null;
@@ -82,6 +87,15 @@
       currentHighlighted.classList.remove('proob-highlight');
       currentHighlighted = null;
     }
+    cleanupHandlers();
+  }
+
+  function cleanupHandlers() {
+    currentHandlers.forEach(({ el, type, handler }) => {
+      el.removeEventListener(type, handler, true);
+    });
+    currentHandlers = [];
+    pendingResolve = null;
   }
 
   function showToast(message) {
@@ -107,14 +121,10 @@
       return new Promise(resolve => {
         const handler = (ev) => {
           if (!currentHighlighted || !currentHighlighted.contains(ev.target)) return;
-          cleanup();
+          cleanupHandlers();
           resolve({ ok: true, completed: true });
         };
-        const cleanup = () => {
-          if (currentHighlighted) currentHighlighted.removeEventListener('click', handler, true);
-          document.removeEventListener('click', handler, true);
-          pendingResolve = null;
-        };
+        currentHandlers.push({ el: document, type: 'click', handler });
         document.addEventListener('click', handler, true);
         pendingResolve = resolve;
       });
@@ -124,14 +134,11 @@
       return new Promise(resolve => {
         const handler = () => {
           if (el.value && el.value.trim().length > 0) {
-            cleanup();
+            cleanupHandlers();
             resolve({ ok: true, completed: true, value: el.value });
           }
         };
-        const cleanup = () => {
-          el.removeEventListener('input', handler);
-          pendingResolve = null;
-        };
+        currentHandlers.push({ el, type: 'input', handler });
         el.addEventListener('input', handler);
         pendingResolve = resolve;
       });

@@ -70,7 +70,8 @@ async function extractFromPage() {
     if (!res?.ok) throw new Error(res?.error || 'No se pudo extraer la pagina.');
     return res;
   } catch (e) {
-    throw new Error('No se pudo comunicar con la pestana. Recarga la pagina e intenta de nuevo.');
+    if (e.message.includes('agotado')) throw e;
+    throw new Error('No se pudo acceder al contenido de la pagina. Es posible que sea una pagina restringida (chrome://, pdf, etc). Recarga e intenta de nuevo.');
   }
 }
 
@@ -97,6 +98,14 @@ function pickSpanishVoice() {
   return voices.find(v => v.lang?.toLowerCase().startsWith(state.lang))
       || voices.find(v => v.lang?.toLowerCase().startsWith('es'))
       || voices[0] || null;
+}
+
+function waitForVoices() {
+  return new Promise(resolve => {
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length) return resolve();
+    window.speechSynthesis.onvoiceschanged = () => resolve();
+  });
 }
 
 function speak(text, onEnd) {
@@ -146,6 +155,7 @@ function renderSummary(data, meta) {
   $('meta-json').textContent = JSON.stringify(meta, null, 2);
   state.analysis = data;
   state.tourSteps = Array.isArray(data.interactive_tour) ? data.interactive_tour : [];
+  $('start-tour-btn').hidden = state.tourSteps.length === 0;
   showView('summary');
 }
 
@@ -266,6 +276,8 @@ function wire() {
   if ('speechSynthesis' in window) {
     window.speechSynthesis.onvoiceschanged = () => { /* voces cargadas */ };
   }
+  // Precargar voces TTS
+  waitForVoices().catch(() => {});
 }
 
 (async function init() {
