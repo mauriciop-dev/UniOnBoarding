@@ -58,12 +58,6 @@ async function getActiveTab() {
   return tab;
 }
 
-async function ensureContentScript(tabId) {
-  const res = await chrome.runtime.sendMessage({ type: 'PROOB_INJECT_CS', tabId });
-  if (!res?.ok) throw new Error('No se pudo inyectar el script en la pagina');
-  await new Promise(r => setTimeout(r, 150));
-}
-
 async function extractFromPage() {
   const tab = await getActiveTab();
   if (!tab?.id) throw new Error('No se encontro una pestana activa.');
@@ -73,7 +67,8 @@ async function extractFromPage() {
     throw new Error(res?.error || 'Error desconocido');
   } catch (e) {
     try {
-      await ensureContentScript(tab.id);
+      await chrome.runtime.sendMessage({ type: 'PROOB_INJECT_CS', tabId: tab.id });
+      await new Promise(r => setTimeout(r, 150));
       const res = await chrome.tabs.sendMessage(tab.id, { type: 'PROOB_EXTRACT' });
       if (!res?.ok) throw new Error(res?.error || 'Error desconocido');
       return res;
