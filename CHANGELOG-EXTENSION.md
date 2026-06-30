@@ -1,5 +1,37 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.3 (fix 2) — Inyeccion via background SW, no desde sidepanel
+
+**Problema:** `chrome.scripting.executeScript` con `activeTab` no funciona
+desde el contexto del side panel. El store aprobo la extension pero al
+descargarla con otro usuario, el content script no se inyectaba. El error
+era "No se pudo acceder al contenido de la pagina".
+
+**Causa:** `activeTab` se otorga al hacer clic en el icono de la extension,
+pero el side panel (aunque es una pagina de extension) no hereda el
+`activeTab` para `executeScript`. Solo el service worker (background.js)
+tiene el contexto de `activeTab` valido.
+
+**Solucion:** El side panel ya no inyecta directamente. Envia un mensaje
+`PROOB_INJECT_CS` al background via `chrome.runtime.sendMessage()`. El
+background ejecuta `chrome.scripting.executeScript` y responde. El side
+panel espera la confirmacion y luego procede con `PROOB_EXTRACT`.
+
+**Archivos tocados:**
+- `extension/background.js` — nuevo listener `PROOB_INJECT_CS` que inyecta
+  content.js + content.css via `chrome.scripting`
+- `extension/sidepanel.js` — `extractFromPage()` llama a
+  `ensureContentScript()` que envia mensaje al background
+
+**Leccion aprendida:** `activeTab` + `scripting.executeScript` solo funciona
+DESDE EL BACKGROUND SERVICE WORKER, no desde side panel ni popup. Para
+inyectar bajo demanda, el side panel debe pedirselo al background via
+`chrome.runtime.sendMessage`.
+
+---
+
+## 0.1.3 — Eliminar content_scripts con <all_urls>
+
 ## 0.1.3 — Eliminar content_scripts con <all_urls>
 
 **Problema:** Chrome Web Store rechaza o retrasa revision profunda por usar
