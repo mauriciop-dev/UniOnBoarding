@@ -1,6 +1,41 @@
 # Changelog / Bitacora de problemas y soluciones
 
-## 0.1.3 (fix 2) — Inyeccion via background SW, no desde sidepanel
+## 0.1.3 (fix 3) — Inyeccion directa desde onClicked, no via message al background
+
+**Problema:** `openPanelOnActionClick: true` impide que `onClicked` se
+dispare. El background nunca obtiene `activeTab`, por lo que cuando el side
+panel le pide via mensaje que inyecte, falla porque el background no tiene
+permiso.
+
+**Causa raiz:** `setPanelBehavior({ openPanelOnActionClick: true })` hace
+que Chrome maneje el clic internamente. El service worker NO recibe el
+evento `onClicked`, y sin ese evento, `activeTab` no se otorga al background.
+
+**Solucion definitiva:**
+- NO usar `setPanelBehavior` en absoluto
+- Todo en `onClicked`: inyectar content script (gesto activo) Y abrir side
+  panel sincronamente (sin `await`)
+- El `onInstalled` ya no es necesario
+- El listener de mensajes `PROOB_INJECT_CS` se mantiene como fallback por
+  si el usuario recarga la pagina con el panel abierto
+
+**Flujo correcto:**
+1. Usuario hace clic en icono → `onClicked` se dispara
+2. `executeScript` + `insertCSS` se invocan (gesto activo) → content script
+   inyectado en la pestana activa
+3. `sidePanel.open()` se llama sincronamente → panel se abre
+4. Cuando el usuario hace clic en "Esta pagina", el content script ya esta
+   disponible
+
+**Archivos tocados:**
+- `extension/background.js` — onClicked hace inyeccion + open panel
+- `extension/sidepanel.js` — extractFromPage mas simple, usa
+  chrome.runtime.sendMessage como fallback
+
+**Leccion aprendida:** `activeTab` SOLO se otorga al service worker cuando
+recibe un evento de interaccion directa (`onClicked`). NO con
+`openPanelOnActionClick`. Si necesitas injectar content script, hazlo
+directamente en `onClicked`, no pidas despues.
 
 **Problema:** `chrome.scripting.executeScript` con `activeTab` no funciona
 desde el contexto del side panel. El store aprobo la extension pero al
