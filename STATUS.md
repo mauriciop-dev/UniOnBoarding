@@ -2,7 +2,7 @@
 
 > **Convención**: cuando el usuario escriba **"retomar"**, leer este archivo completo antes de responder. Contiene el estado del proyecto, problemas conocidos y próximos pasos.
 
-Última actualización: 2026-08-11 (v2.0 — Fases 0–3).
+Última actualización: 2026-08-11 (v2.0 — Fases 0–4 parciales).
 
 ---
 
@@ -24,6 +24,7 @@ proonboarding-api/
 ├── api/
 │   ├── analyze-page.js     ← endpoint principal POST (análisis + tour)
 │   ├── chat.js             ← POST /api/chat (modo Q&A interactivo)
+│   ├── feedback.js         ← POST /api/feedback (calificaciones / growth loop)
 │   ├── health.js           ← GET /api/health (estado de providers)
 │   └── tts.js              ← POST /api/tts (síntesis cloud, capa L2)
 ├── lib/
@@ -32,7 +33,8 @@ proonboarding-api/
 │   ├── chat.js             ← cadena conversacional de chat (mismos 4 providers)
 │   ├── cors.js             ← CORS restringido (chrome-extension://, localhost, vercel.app)
 │   ├── tts-engines.js      ← motores de TTS cloud (Deepgram)
-│   └── insforge-client.js  ← cliente REST para InsForge (caché)
+│   └── insforge-client.js  ← cliente REST para InsForge (caché + feedback)
+├── migrations/             ← migraciones SQL aplicadas (feedback en 20260811202037)
 ├── extension/              ← Extensión Chrome MV3
 │   ├── manifest.json
 │   ├── background.js       ← service worker (abre side panel + inyecta content)
@@ -76,6 +78,11 @@ proonboarding-api/
 - Flujo condicional: 2 clics fuera o 25 s sin acción → ayuda in-page con **Repetir**/**Continuar** (y **Saltar** en `input_required`).
 - 3 avatares semi-transparentes (🤖 bot / 👨‍💻 hombre / 👩‍💻 mujer), persistentes, con voz Web Speech según género (best-effort).
 
+✅ **FASE 4 (parcial)**:
+- **Feedback / growth loop**: tarjeta de estrellas + comentario en el panel (1 vez/24 h), `POST /api/feedback` → tabla `feedback` en InsForge (migración aplicada, verificado `stored:true`). Enlace a Chrome Web Store con el ID real de la extensión.
+- **Sugerencias rápidas** en el chat (chips contextuales con la plataforma detectada).
+- **Capa Voicebox** configurable en `tts-provider.js` (L3): servidor local TTS con contrato `POST {text, lang}` → audio; degrada a Web Speech si falla. Campo en Configuración del panel.
+
 ---
 
 ## 4. Estado de los providers (verificado en prod)
@@ -100,8 +107,11 @@ proonboarding-api/
 ## 6. Próximos pasos (en orden de prioridad)
 
 ### FASE 4 (siguiente, según `AjustesAgosto.txt`)
-- [ ] **Side Panel v2**: rediseño que combine chat, tarjetas contextuales y módulo de feedback/calificación (Chrome Web Store).
-- [ ] **Respaldo Voicebox** (`mauriciop-dev/voicebox`): fallback TTS/STT local para sin conexión.
+- [x] **Feedback / growth loop** (estrellas + comentario + enlace a store) con persistencia en InsForge.
+- [x] **Sugerencias rápidas** en el chat (chips contextuales).
+- [x] Capa **Voicebox** configurable en el motor de voz (contrato genérico `POST {text, lang}` → audio).
+- [ ] Conectar con el repo real `mauriciop-dev/voicebox` (privado/inaccesible vía GitHub público) y ajustar su contrato exacto si difiere.
+- [ ] **Side Panel v2**: rediseño visual completo que combine chat + tarjetas contextuales.
 - [ ] Activar capa L1 **Gemini Live** (WebSocket, requiere credencial/IAM).
 
 ### Pendientes técnicos / producto

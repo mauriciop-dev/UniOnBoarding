@@ -1,5 +1,29 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.6 — FASE 4: Side panel hibrido, feedback y Voicebox
+
+**Feedback / growth loop:**
+- Tarjeta "¿Te resulto util?" en el resumen (5 estrellas + comentario opcional), visible 1 vez cada 24 h (`proob.feedback`).
+- Se envia a `POST /api/feedback`; el endpoint valida `rating` 1-5 y guarda en la tabla `feedback` de InsForge (migracion `20260811202037_add-feedback.sql` aplicada). Si InsForge falla, responde `{ok:true, stored:false}` sin romper.
+- Enlace "Calificar en Chrome Web Store" apuntando a `https://chromewebstore.google.com/detail/<chrome.runtime.id>`.
+
+**Sugerencias rapidas en el chat:**
+- 3 chips contextuales (usan la plataforma detectada) que envian la pregunta de un clic.
+
+**Capa Voicebox (TTS local configurable):**
+- `tts-provider.js` gana la capa `VOICEBOX` (entre cloud y Web Speech). Contrato: `POST {text, lang}` -> audio binario. Se usa al no haber conexion o como fallback; ante error degrada a Web Speech con reanudo por chunk.
+- Campo "Servidor local de voz (Voicebox)" en Configuracion, persistido (`proob.voiceboxUrl`).
+
+**Archivos tocados:**
+- `extension/sidepanel.html` / `.css` / `.js` — feedback, chips, campo voicebox
+- `extension/tts-provider.js` — capa VOICEBOX (refactor `_speakEndpoint` generico)
+- `api/feedback.js` — endpoint nuevo (CORS, validacion, InsForge)
+- `lib/insforge-client.js` — `storeFeedback()`
+- `insforge-schema.sql` + `migrations/20260811202037_add-feedback.sql` — tabla `feedback`
+- `vercel.json` — maxDuration de `api/feedback.js`
+
+---
+
 ## 0.1.5 — FASE 3: UI/UX interactiva y condicional
 
 **Etiquetas dinamicas + mini-avatar en el DOM:**

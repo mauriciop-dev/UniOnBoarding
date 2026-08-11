@@ -3,15 +3,17 @@
 // Capas:
 //   L1 gemini_live : Gemini Live API (stub, se activa en Fase 4)
 //   L2 cloud       : API cloud de TTS (/api/tts) — Deepgram/Nova por detrás
-//   L3 local       : Web Speech API (speechSynthesis), funciona offline
+//   L3 voicebox    : servidor local Voicebox (TTS offline, configurable)
+//   L4 local       : Web Speech API (speechSynthesis), funciona offline
 //
 // Conmutación automática:
-//   - Sin conexion -> L3. Vuelve a la nube al reconectar (eventos online/offline).
-//   - Error 4xx/5xx/red en la nube -> degrada a L3 y reanuda en el chunk exacto.
+//   - Sin conexion -> L3/L4. Vuelve a la nube al reconectar (eventos online/offline).
+//   - Error 4xx/5xx/red en la nube o voicebox -> degrada a L4 y reanuda en el chunk exacto.
 
 export const TTS_LAYERS = Object.freeze({
   GEMINI_LIVE: 'gemini_live',
   CLOUD: 'cloud',
+  VOICEBOX: 'voicebox',
   LOCAL: 'local'
 });
 
@@ -94,8 +96,9 @@ function playBlob(blob) {
 }
 
 export class TTSProvider {
-  constructor({ cloudEndpoint = null, voiceLang = 'es', voiceGender = null, onLayerChange = null, onOnlineChange = null } = {}) {
+  constructor({ cloudEndpoint = null, voiceLang = 'es', voiceGender = null, localEndpoint = null, onLayerChange = null, onOnlineChange = null } = {}) {
     this.cloudEndpoint = cloudEndpoint;
+    this.localEndpoint = localEndpoint;
     this.voiceLang = voiceLang || 'es';
     this.voiceGender = voiceGender || null;
     this.onLayerChange = onLayerChange;
@@ -108,8 +111,9 @@ export class TTSProvider {
     this._bindNetwork();
   }
 
-  configure({ cloudEndpoint, voiceLang, voiceGender } = {}) {
+  configure({ cloudEndpoint, voiceLang, voiceGender, localEndpoint } = {}) {
     if (typeof cloudEndpoint === 'string') this.cloudEndpoint = cloudEndpoint;
+    if (typeof localEndpoint === 'string') this.localEndpoint = localEndpoint;
     if (typeof voiceLang === 'string') this.voiceLang = voiceLang;
     if (voiceGender === 'male' || voiceGender === 'female' || voiceGender === null) this.voiceGender = voiceGender;
   }
@@ -151,8 +155,8 @@ export class TTSProvider {
   }
 
   _preferredLayer() {
-    if (!this.online) return TTS_LAYERS.LOCAL;
-    if (this.cloudEndpoint) return TTS_LAYERS.CLOUD;
+    if (this.cloudEndpoint && this.online) return TTS_LAYERS.CLOUD;
+    if (this.localEndpoint) return TTS_LAYERS.VOICEBOX;
     return TTS_LAYERS.LOCAL;
   }
 
@@ -169,12 +173,14 @@ export class TTSProvider {
     const target = this._preferredLayer();
     this._setLayer(target);
 
-    if (target === TTS_LAYERS.CLOUD && this.cloudEndpoint) {
+    const endpoint = target === TTS_LAYERS.CLOUD ? this.cloudEndpoint
+      : (target === TTS_LAYERS.VOICEBOX ? this.localEndpoint : null);
+    if (endpoint) {
       try {
-        await this._speakCloud(text, { ...opts, token });
+        await this._speakEndpoint(endpoint, text, { ...opts, token });
       } catch (err) {
         if (token !== this._jobToken) return;
-        console.warn('[tts] cloud fallo, degradando a local:', err.message);
+        console.warn('[tts] endpoint fallo, degradando a local:', err.message);
         this._setLayer(TTS_LAYERS.LOCAL);
         const resumeAt = typeof err.resumeIndex === 'number' ? err.resumeIndex : (opts.resumeIndex || 0);
         this._speakLocalFrom(text, resumeAt, { ...opts, token });
@@ -186,7 +192,7 @@ export class TTSProvider {
     this._speakLocalFrom(text, opts.resumeIndex || 0, { ...opts, token });
   }
 
-  async _speakCloud(text, opts) {
+  async _speakEndpoint(endpoint, text, opts) {
     const chunks = chunkSentences(text);
     const start = Math.min(Math.max(opts.resumeIndex || 0, 0), Math.max(chunks.length - 1, 0));
     this.isSpeaking = true;
@@ -194,7 +200,7 @@ export class TTSProvider {
       if (opts.token !== this._jobToken) throw new Error('cancelled');
       let res;
       try {
-        res = await fetch(this.cloudEndpoint, {
+        res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: chunks[i], lang: this.voiceLang })

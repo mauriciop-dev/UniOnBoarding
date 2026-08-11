@@ -78,6 +78,23 @@ Chat conversacional (modo Q&A) sobre la página en análisis. Reusa la misma cad
 { "reply": "...", "provider": "bedrock", "elapsed_ms": 1200, "attempts": [] }
 ```
 
+### `POST /api/feedback`
+Recibe la calificación (1–5) y comentario del usuario (bucle de crecimiento). Lo guarda en la tabla `feedback` de InsForge; si no se puede persistir, responde `{ ok: true, stored: false }` sin fallar.
+
+**Body**
+```json
+{
+  "rating": 5,
+  "comment": "Muy útil, me ahorró tiempo",
+  "url": "https://aiprodig.com/",
+  "platform": "Aiprodig",
+  "provider": "groq",
+  "lang": "es"
+}
+```
+
+**Response 200**: `{ "ok": true, "stored": true }` · **400** si `rating` no es entero entre 1 y 5.
+
 ---
 
 ## Arquitectura
@@ -86,9 +103,9 @@ Chat conversacional (modo Q&A) sobre la página en análisis. Reusa la misma cad
 Extensión Chrome
        │
        ▼
-  Vercel Function (api/analyze-page.js)
+  Vercel Functions (api/analyze-page, api/chat, api/tts, api/feedback)
        │
-       ├──► InsForge (cache hit?) ──► JSON cacheado
+       ├──► InsForge (cache hit? / feedback) ──► JSON cacheado
        │                                ▲
        │                                │
         └──► AI provider chain ◄─────────┘
@@ -186,16 +203,18 @@ proonboarding-api/
 ├── api/
 │   ├── analyze-page.js     ← endpoint principal POST
 │   ├── chat.js             ← chat Q&A (modo interactivo)
+│   ├── feedback.js         ← calificaciones/feedback (growth loop)
 │   ├── health.js           ← healthcheck con estado de providers e InsForge
 │   └── tts.js              ← síntesis de voz cloud (capa L2)
 ├── lib/
 │   ├── prompt-template.js  ← prompt validado para todos los providers
 │   ├── ai-provider.js      ← cadena Groq → Gemini → DeepSeek → Bedrock (retry/backoff)
 │   ├── chat.js             ← cadena de chat conversacional
-│   ├── insforge-client.js  ← cliente REST para InsForge (cache)
+│   ├── insforge-client.js  ← cliente REST para InsForge (cache + feedback)
 │   ├── cors.js             ← CORS restringido (chrome-extension://, localhost, vercel.app)
 │   └── tts-engines.js      ← motores de TTS cloud (Deepgram)
-├── insforge-schema.sql     ← SQL para crear la tabla page_analyses
+├── migrations/             ← migraciones SQL aplicadas (insforge db migrations)
+├── insforge-schema.sql     ← SQL de referencia (page_analyses + feedback)
 ├── scripts/
 │   └── test-local.js       ← cliente de prueba contra el endpoint
 ├── vercel.json             ← config maxDuration

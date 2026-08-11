@@ -73,6 +73,13 @@ Si quieres iterar con el backend en `localhost`:
 - **URL del API**: por defecto la producción. Cambiable desde el engranaje.
 - **Idioma**: `es` (default), `en`, `pt`, `fr`. Afecta al contenido generado por la IA y a la voz TTS.
 - **Avatar del asistente**: selector en el header del recorrido (🤖 bot, 👨‍💻 hombre, 👩‍💻 mujer). Persistido localmente (`proob.avatar`). Cambia el mini-avatar flotante en la página y, en lo posible, el género de la voz TTS local (best-effort según voces instaladas).
+- **Servidor local de voz (Voicebox, opcional)**: URL de un TTS local (p. ej. `http://localhost:5000/tts`). Contrato esperado: `POST` con `{ text, lang }` → audio binario. Se usa cuando no hay conexión o como fallback antes de las voces del sistema; si falla, degrada a Web Speech.
+
+## FASE 4 — Side panel híbrido y crecimiento
+
+- **Feedback / growth loop**: tras el análisis (y al terminar el recorrido) aparece una tarjeta "¿Te resultó útil?" con 5 estrellas + comentario opcional. Se envía a `POST /api/feedback` (guardado en InsForge) y un enlace "Calificar en Chrome Web Store" apunta al ID real de la extensión. Se muestra máximo 1 vez cada 24 h.
+- **Sugerencias rápidas en el chat**: 3 chips con preguntas contextuales (usando la plataforma detectada) que se envían de un clic.
+- El chat combina preguntas libres + tarjetas de acceso rápido para acciones frecuentes.
 
 ## Comportamiento del recorrido (FASE 3)
 

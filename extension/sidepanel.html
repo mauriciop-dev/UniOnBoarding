@@ -56,6 +56,24 @@
           <summary>Detalles tecnicos</summary>
           <pre id="meta-json"></pre>
         </details>
+        <section id="feedback-card" class="feedback-card" hidden>
+          <div class="feedback-row">
+            <span class="feedback-label">¿Te resultó útil?</span>
+            <div id="feedback-stars" class="feedback-stars">
+              <button class="star" data-value="1" aria-label="1 estrella">★</button>
+              <button class="star" data-value="2" aria-label="2 estrellas">★</button>
+              <button class="star" data-value="3" aria-label="3 estrellas">★</button>
+              <button class="star" data-value="4" aria-label="4 estrellas">★</button>
+              <button class="star" data-value="5" aria-label="5 estrellas">★</button>
+            </div>
+          </div>
+          <textarea id="feedback-comment" rows="2" placeholder="Cuéntanos qué se puede mejorar (opcional)"></textarea>
+          <div class="feedback-actions">
+            <button id="feedback-send" class="primary" disabled>Enviar</button>
+            <a id="feedback-store-link" href="#" target="_blank" rel="noreferrer" hidden>Calificar en Chrome Web Store</a>
+          </div>
+          <div id="feedback-status" class="feedback-status"></div>
+        </section>
       </section>
 
       <!-- Vista tour -->
@@ -94,6 +112,7 @@
           <button id="chat-back-btn" class="ghost">Resumen</button>
           <span class="chat-title">Pregunta sobre la pagina</span>
         </div>
+        <div id="chat-suggestions" class="chat-suggestions"></div>
         <div id="chat-messages" class="chat-messages"></div>
         <div class="chat-composer">
           <textarea id="chat-input" rows="2" placeholder="Ej: ¿Como hago X en esta pagina?"></textarea>
@@ -127,6 +146,11 @@
             <option value="fr">Frances</option>
           </select>
         </label>
+        <label>
+          Servidor local de voz (Voicebox) - opcional
+          <input id="voicebox-url-input" type="url" placeholder="http://localhost:5000/tts" />
+        </label>
+        <p class="hint settings-hint">El servidor local se usa cuando no hay conexión o como fallback antes de las voces del sistema.</p>
         <div class="modal-actions">
           <button id="settings-cancel" class="ghost">Cancelar</button>
           <button id="settings-save" class="primary">Guardar</button>

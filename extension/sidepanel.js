@@ -4,7 +4,13 @@ import { analyzePageWithFallback } from './ai-engine.js';
 import { TTSProvider, TTS_LAYERS } from './tts-provider.js';
 
 const DEFAULT_API_URL = 'https://uni-on-boarding-idcs.vercel.app/api/analyze-page';
-const STORAGE_KEYS = { apiUrl: 'proob.apiUrl', lang: 'proob.lang', avatar: 'proob.avatar' };
+const STORAGE_KEYS = {
+  apiUrl: 'proob.apiUrl',
+  lang: 'proob.lang',
+  avatar: 'proob.avatar',
+  voiceboxUrl: 'proob.voiceboxUrl',
+  feedback: 'proob.feedback'
+};
 
 const LOCAL_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const LOCAL_CACHE_MAX = 20;
@@ -52,6 +58,7 @@ const state = {
   apiUrl: DEFAULT_API_URL,
   lang: 'es',
   avatar: 'bot',
+  voiceboxUrl: '',
   pageUrl: '',
   pageTitle: '',
   pageHtml: '',
@@ -60,6 +67,7 @@ const state = {
   tourSteps: [],
   currentStep: 0,
   chatHistory: [],
+  feedbackRating: 0,
   speech: null,
   isSpeaking: false
 };
@@ -72,21 +80,29 @@ function showView(name) {
 function setLoadingText(text) { $('loading-text').textContent = text; }
 
 async function loadSettings() {
-  const stored = await chrome.storage.local.get([STORAGE_KEYS.apiUrl, STORAGE_KEYS.lang, STORAGE_KEYS.avatar]);
+  const stored = await chrome.storage.local.get([STORAGE_KEYS.apiUrl, STORAGE_KEYS.lang, STORAGE_KEYS.avatar, STORAGE_KEYS.voiceboxUrl]);
   state.apiUrl = stored[STORAGE_KEYS.apiUrl] || DEFAULT_API_URL;
   state.lang = stored[STORAGE_KEYS.lang] || 'es';
   state.avatar = stored[STORAGE_KEYS.avatar] || 'bot';
+  state.voiceboxUrl = stored[STORAGE_KEYS.voiceboxUrl] || '';
   $('api-url-input').value = state.apiUrl;
   $('lang-input').value = state.lang;
+  $('voicebox-url-input').value = state.voiceboxUrl;
   updateAvatarUI();
 }
 
 async function saveSettings() {
   const apiUrl = $('api-url-input').value.trim() || DEFAULT_API_URL;
   const lang = $('lang-input').value;
-  await chrome.storage.local.set({ [STORAGE_KEYS.apiUrl]: apiUrl, [STORAGE_KEYS.lang]: lang });
+  const voiceboxUrl = $('voicebox-url-input').value.trim();
+  await chrome.storage.local.set({
+    [STORAGE_KEYS.apiUrl]: apiUrl,
+    [STORAGE_KEYS.lang]: lang,
+    [STORAGE_KEYS.voiceboxUrl]: voiceboxUrl
+  });
   state.apiUrl = apiUrl;
   state.lang = lang;
+  state.voiceboxUrl = voiceboxUrl;
   configureTts();
   $('settings-modal').hidden = true;
 }
@@ -160,7 +176,8 @@ function configureTts() {
   tts.configure({
     cloudEndpoint: deriveTtsEndpoint(state.apiUrl),
     voiceLang: state.lang,
-    voiceGender: avatarToGender(state.avatar)
+    voiceGender: avatarToGender(state.avatar),
+    localEndpoint: state.voiceboxUrl || null
   });
 }
 
@@ -187,6 +204,7 @@ function updateLayerChip(layer) {
   const labels = {
     [TTS_LAYERS.GEMINI_LIVE]: 'Voz en vivo',
     [TTS_LAYERS.CLOUD]: 'Voz cloud',
+    [TTS_LAYERS.VOICEBOX]: 'Voicebox',
     [TTS_LAYERS.LOCAL]: 'Voz local'
   };
   chip.textContent = labels[layer] || layer;
@@ -231,6 +249,82 @@ function renderSummary(data, meta) {
   state.tourSteps = Array.isArray(data.interactive_tour) ? data.interactive_tour : [];
   $('start-tour-btn').hidden = state.tourSteps.length === 0;
   showView('summary');
+  maybeShowFeedback();
+}
+
+const FEEDBACK_TTL_MS = 24 * 60 * 60 * 1000;
+
+function deriveFeedbackEndpoint(apiUrl) {
+  const base = String(apiUrl || '')
+    .replace(/\/api\/analyze-page\/?$/i, '')
+    .replace(/\/+$/, '');
+  return base ? `${base}/api/feedback` : null;
+}
+
+async function feedbackAlreadySent() {
+  const store = await chrome.storage.local.get([STORAGE_KEYS.feedback]);
+  const ts = store[STORAGE_KEYS.feedback];
+  return Boolean(ts && (Date.now() - ts) < FEEDBACK_TTL_MS);
+}
+
+function setFeedbackRating(n) {
+  state.feedbackRating = n;
+  document.querySelectorAll('#feedback-stars .star').forEach((b) => {
+    b.classList.toggle('on', Number(b.dataset.value) <= n);
+  });
+  $('feedback-send').disabled = n < 1;
+}
+
+async function maybeShowFeedback() {
+  const card = $('feedback-card');
+  if (!card) return;
+  if (await feedbackAlreadySent()) { card.hidden = true; return; }
+  state.feedbackRating = 0;
+  $('feedback-comment').value = '';
+  $('feedback-comment').disabled = false;
+  document.querySelectorAll('#feedback-stars .star').forEach((b) => { b.disabled = false; });
+  $('feedback-status').textContent = '';
+  setFeedbackRating(0);
+  if (chrome.runtime?.id) {
+    const link = $('feedback-store-link');
+    link.href = `https://chromewebstore.google.com/detail/${chrome.runtime.id}`;
+    link.hidden = false;
+  }
+  card.hidden = false;
+}
+
+async function sendFeedback() {
+  const rating = state.feedbackRating || 0;
+  if (rating < 1) return;
+  const comment = $('feedback-comment').value.trim();
+  $('feedback-send').disabled = true;
+  const status = $('feedback-status');
+  status.textContent = 'Enviando...';
+  const endpoint = deriveFeedbackEndpoint(state.apiUrl);
+  const payload = {
+    rating,
+    comment,
+    url: state.pageUrl,
+    platform: state.analysis?.page_analysis?.detected_platform_name || '',
+    provider: state.analysis?._meta?.provider || '',
+    lang: state.lang
+  };
+  try {
+    if (endpoint) {
+      await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(r => r.json()).catch(() => ({}));
+    }
+    await chrome.storage.local.set({ [STORAGE_KEYS.feedback]: Date.now() });
+    status.textContent = '¡Gracias por tu feedback!';
+    $('feedback-comment').disabled = true;
+    document.querySelectorAll('#feedback-stars .star').forEach((b) => { b.disabled = true; });
+  } catch (err) {
+    status.textContent = 'No se pudo enviar. Reintenta en un momento.';
+    $('feedback-send').disabled = false;
+  }
 }
 
 async function renderTourStep(index) {
@@ -277,6 +371,7 @@ async function exitTour() {
   stopSpeaking();
   await clearHighlightOnPage();
   showView('summary');
+  maybeShowFeedback();
 }
 
 function deriveChatEndpoint(apiUrl) {
@@ -321,8 +416,33 @@ function buildChatContext() {
   return parts.join('\n\n');
 }
 
+const SUGGESTIONS = [
+  (platform) => platform ? `¿Cómo empiezo a usar ${platform}?` : '¿Cómo empiezo a usar esta página?',
+  () => '¿Dónde está la configuración?',
+  () => '¿Cómo guardo o exporto mis datos?'
+];
+
+function renderSuggestions() {
+  const wrap = $('chat-suggestions');
+  if (!wrap) return;
+  const platform = state.analysis?.page_analysis?.detected_platform_name || '';
+  wrap.innerHTML = '';
+  SUGGESTIONS.forEach((fn) => {
+    const b = document.createElement('button');
+    b.className = 'chip';
+    b.textContent = fn(platform);
+    b.addEventListener('click', () => {
+      $('chat-input').value = fn(platform);
+      $('chat-send').disabled = false;
+      sendChatMessage();
+    });
+    wrap.appendChild(b);
+  });
+}
+
 function openChat() {
   showView('chat');
+  renderSuggestions();
   const input = $('chat-input');
   input.focus();
   if (!$('chat-messages').children.length) {
@@ -454,6 +574,10 @@ function wire() {
   document.querySelectorAll('.avatar-opt').forEach((btn) => {
     btn.addEventListener('click', () => setAvatar(btn.dataset.avatar));
   });
+  document.querySelectorAll('#feedback-stars .star').forEach((btn) => {
+    btn.addEventListener('click', () => setFeedbackRating(Number(btn.dataset.value)));
+  });
+  $('feedback-send').addEventListener('click', sendFeedback);
   $('play-welcome-btn').addEventListener('click', () => {
     const t = state.analysis?.page_analysis?.audio_welcome_script;
     if (t) speak(t);
@@ -474,6 +598,7 @@ function wire() {
   $('settings-btn').addEventListener('click', () => {
     $('api-url-input').value = state.apiUrl;
     $('lang-input').value = state.lang;
+    $('voicebox-url-input').value = state.voiceboxUrl;
     $('settings-modal').hidden = false;
   });
   $('settings-cancel').addEventListener('click', () => { $('settings-modal').hidden = true; });

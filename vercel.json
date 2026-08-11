@@ -9,6 +9,9 @@
     },
     "api/tts.js": {
       "maxDuration": 20
+    },
+    "api/feedback.js": {
+      "maxDuration": 10
     }
   }
 }
