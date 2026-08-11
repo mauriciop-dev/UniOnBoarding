@@ -187,9 +187,9 @@
         </label>
         <label>
           Servidor local de voz (Voicebox) - opcional
-          <input id="voicebox-url-input" type="url" placeholder="http://localhost:5000/tts" />
+          <input id="voicebox-url-input" type="url" placeholder="http://127.0.0.1:17493" />
         </label>
-        <p class="hint settings-hint">El servidor local se usa cuando no hay conexión o como fallback antes de las voces del sistema.</p>
+        <p class="hint settings-hint">URL base de Voicebox (el backend FastAPI local). Usa la primera voz clonada de tus perfiles. Contrato real: GET /profiles + POST /generate/stream → WAV. Se usa sin conexión o como fallback antes de las voces del sistema.</p>
         <div class="modal-actions">
           <button id="settings-cancel" class="ghost">Cancelar</button>
           <button id="settings-save" class="primary">Guardar</button>

@@ -62,6 +62,10 @@ function pickVoice(lang, gender) {
   return cands[0] || null;
 }
 
+function _trimSlash(url) {
+  return String(url || '').replace(/\/+$/, '');
+}
+
 function chunkSentences(text) {
   const parts = String(text || '')
     .split(/(?<=[.!?…])\s+/)
@@ -173,23 +177,82 @@ export class TTSProvider {
     const target = this._preferredLayer();
     this._setLayer(target);
 
-    const endpoint = target === TTS_LAYERS.CLOUD ? this.cloudEndpoint
-      : (target === TTS_LAYERS.VOICEBOX ? this.localEndpoint : null);
-    if (endpoint) {
+    const onEndpointError = (err) => {
+      if (token !== this._jobToken) return true;
+      console.warn('[tts] endpoint fallo, degradando a local:', err.message);
+      this._setLayer(TTS_LAYERS.LOCAL);
+      const resumeAt = typeof err.resumeIndex === 'number' ? err.resumeIndex : (opts.resumeIndex || 0);
+      this._speakLocalFrom(text, resumeAt, { ...opts, token });
+    };
+
+    if (target === TTS_LAYERS.CLOUD && this.cloudEndpoint) {
       try {
-        await this._speakEndpoint(endpoint, text, { ...opts, token });
-      } catch (err) {
-        if (token !== this._jobToken) return;
-        console.warn('[tts] endpoint fallo, degradando a local:', err.message);
-        this._setLayer(TTS_LAYERS.LOCAL);
-        const resumeAt = typeof err.resumeIndex === 'number' ? err.resumeIndex : (opts.resumeIndex || 0);
-        this._speakLocalFrom(text, resumeAt, { ...opts, token });
-      }
+        await this._speakEndpoint(this.cloudEndpoint, text, { ...opts, token });
+      } catch (err) { onEndpointError(err); }
+      return;
+    }
+
+    if (target === TTS_LAYERS.VOICEBOX && this.localEndpoint) {
+      try {
+        await this._speakVoicebox(this.localEndpoint, text, { ...opts, token });
+      } catch (err) { onEndpointError(err); }
       return;
     }
 
     this._setLayer(TTS_LAYERS.LOCAL);
     this._speakLocalFrom(text, opts.resumeIndex || 0, { ...opts, token });
+  }
+
+  async _ensureVoiceboxProfile(baseUrl) {
+    if (this._voiceboxProfileId) return;
+    const res = await fetch(`${_trimSlash(baseUrl)}/profiles`, {
+      headers: { 'X-Voicebox-Client-Id': 'proonboarding-extension' }
+    });
+    if (!res.ok) throw new Error(`Voicebox /profiles ${res.status}`);
+    const json = await res.json().catch(() => ({}));
+    const list = Array.isArray(json) ? json : (json.profiles || []);
+    const first = list[0];
+    if (!first) throw new Error('Voicebox sin perfiles: crea una voz clonada en la app.');
+    this._voiceboxProfileId = first.id || first.name;
+  }
+
+  async _speakVoicebox(baseUrl, text, opts) {
+    const chunks = chunkSentences(text);
+    const start = Math.min(Math.max(opts.resumeIndex || 0, 0), Math.max(chunks.length - 1, 0));
+    await this._ensureVoiceboxProfile(baseUrl);
+    this.isSpeaking = true;
+    const url = `${_trimSlash(baseUrl)}/generate/stream`;
+    for (let i = start; i < chunks.length; i++) {
+      if (opts.token !== this._jobToken) throw new Error('cancelled');
+      let res;
+      try {
+        res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Voicebox-Client-Id': 'proonboarding-extension'
+          },
+          body: JSON.stringify({ profile_id: this._voiceboxProfileId, text: chunks[i], language: this.voiceLang })
+        });
+      } catch (err) {
+        this.isSpeaking = false;
+        err.resumeIndex = i;
+        throw err;
+      }
+      if (!res.ok) {
+        this.isSpeaking = false;
+        const err = new Error(`Voicebox ${res.status}`);
+        err.status = res.status;
+        err.resumeIndex = i;
+        throw err;
+      }
+      const blob = await res.blob();
+      await playBlob(blob);
+      if (opts.token !== this._jobToken) throw new Error('cancelled');
+      opts.onProgress?.(i);
+    }
+    this.isSpeaking = false;
+    opts.onEnd?.();
   }
 
   async _speakEndpoint(endpoint, text, opts) {

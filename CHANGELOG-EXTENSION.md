@@ -1,5 +1,16 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.8 — Voicebox: contrato real /profiles + /generate/stream
+
+- La capa L3 usaba un contrato genérico (`POST /tts` con `{text, lang}`) que NO existia en Voicebox. Se releyo el repo (`mauriciop-dev/voicebox`, FastAPI en `127.0.0.1:17493`) y se alineo al contrato real: `GET /profiles` (primera voz clonada) y `POST /generate/stream` con `{profile_id, text, language}` → stream `audio/wav` por chunk, header `X-Voicebox-Client-Id: proonboarding-extension`.
+- El campo de Configuración ahora es la **URL base** (`http://127.0.0.1:17493`) y el hint documenta el contrato.
+- Fallback intacto: si Voicebox no corre o falla, degrada a Web Speech reanudando en el chunk exacto.
+- Version bump a `0.1.7`.
+
+**Pendiente de tu lado para probar L3:** instalar el MSI de Voicebox (Windows), crear/clonar una voz y dejar corriendo el servidor.
+
+---
+
 ## 0.1.7 — Side Panel v2: espacio hibrido (Inicio / Chat)
 
 - **Barra de pestañas** persistente (Inicio / Chat) al pie del panel: el chat deja de ser una vista aislada y se convierte en el segundo espacio siempre accesible. `showView()` sincroniza la pestaña activa y recuerda la ultima vista de "Inicio" (`lastMainView`).

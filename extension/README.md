@@ -1,4 +1,4 @@
-# ProOnboarding - Extensión Chrome (v0.1.6)
+# ProOnboarding - Extensión Chrome (v0.1.7)
 
 Extensión MV3 que consume la API de ProOnboarding desplegada en Vercel. Analiza la página actual, muestra un resumen y guía un recorrido interactivo con audio (TTS) y resaltado visual de elementos.
 
@@ -73,7 +73,7 @@ Si quieres iterar con el backend en `localhost`:
 - **URL del API**: por defecto la producción. Cambiable desde el engranaje.
 - **Idioma**: `es` (default), `en`, `pt`, `fr`. Afecta al contenido generado por la IA y a la voz TTS.
 - **Avatar del asistente**: selector en el header del recorrido (🤖 bot, 👨‍💻 hombre, 👩‍💻 mujer). Persistido localmente (`proob.avatar`). Cambia el mini-avatar flotante en la página y, en lo posible, el género de la voz TTS local (best-effort según voces instaladas).
-- **Servidor local de voz (Voicebox, opcional)**: URL de un TTS local (p. ej. `http://localhost:5000/tts`). Contrato esperado: `POST` con `{ text, lang }` → audio binario. Se usa cuando no hay conexión o como fallback antes de las voces del sistema; si falla, degrada a Web Speech.
+- **Servidor local de voz (Voicebox, opcional)**: URL **base** del backend FastAPI de Voicebox (`http://127.0.0.1:17493`). Contrato real verificado: `GET /profiles` para resolver la primera voz clonada y `POST /generate/stream` con `{profile_id, text, language}` → stream `audio/wav`. Se usa cuando no hay conexión como fallback antes de las voces del sistema; si falla, degrada a Web Speech reanudando en el chunk exacto.
 
 ## FASE 4 — Side panel híbrido y crecimiento
 
