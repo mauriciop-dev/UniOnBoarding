@@ -1,5 +1,17 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.7 — Side Panel v2: espacio hibrido (Inicio / Chat)
+
+- **Barra de pestañas** persistente (Inicio / Chat) al pie del panel: el chat deja de ser una vista aislada y se convierte en el segundo espacio siempre accesible. `showView()` sincroniza la pestaña activa y recuerda la ultima vista de "Inicio" (`lastMainView`).
+- **Hero en la vista inicial**: logo grande, titular y 3 chips de características (audio paso a paso, Q&A, resaltado guiado).
+- **Tarjetas contextuales en el resumen** (`context-cards`): Plataforma, nº de pasos del recorrido y proveedor IA que respondió.
+- **Card "Contexto de esta pagina"** en el chat (colapsable): titulo, plataforma, pasos y boton directo "Iniciar recorrido".
+- Version de manifest bump a `0.1.6`.
+
+**Archivos tocados:** `extension/sidepanel.html`, `extension/sidepanel.css`, `extension/sidepanel.js`, `extension/manifest.json`.
+
+---
+
 ## 0.1.6 — FASE 4: Side panel hibrido, feedback y Voicebox
 
 **Feedback / growth loop:**

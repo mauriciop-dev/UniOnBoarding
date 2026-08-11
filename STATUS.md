@@ -79,6 +79,7 @@ proonboarding-api/
 - 3 avatares semi-transparentes (🤖 bot / 👨‍💻 hombre / 👩‍💻 mujer), persistentes, con voz Web Speech según género (best-effort).
 
 ✅ **FASE 4 (parcial)**:
+- **Side Panel v2**: espacio híbrido con barra de pestañas persistente **Inicio / Chat**; hero en la vista inicial; tarjetas contextuales en el resumen (plataforma, pasos, proveedor); card colapsable "Contexto de esta página" en el chat con acceso al recorrido.
 - **Feedback / growth loop**: tarjeta de estrellas + comentario en el panel (1 vez/24 h), `POST /api/feedback` → tabla `feedback` en InsForge (migración aplicada, verificado `stored:true`). Enlace a Chrome Web Store con el ID real de la extensión.
 - **Sugerencias rápidas** en el chat (chips contextuales con la plataforma detectada).
 - **Capa Voicebox** configurable en `tts-provider.js` (L3): servidor local TTS con contrato `POST {text, lang}` → audio; degrada a Web Speech si falla. Campo en Configuración del panel.

@@ -1,4 +1,4 @@
-# ProOnboarding - Extensión Chrome (v0.1.0)
+# ProOnboarding - Extensión Chrome (v0.1.6)
 
 Extensión MV3 que consume la API de ProOnboarding desplegada en Vercel. Analiza la página actual, muestra un resumen y guía un recorrido interactivo con audio (TTS) y resaltado visual de elementos.
 
@@ -77,9 +77,12 @@ Si quieres iterar con el backend en `localhost`:
 
 ## FASE 4 — Side panel híbrido y crecimiento
 
+- **Espacio híbrido Inicio/Chat**: barra de pestañas persistente. El chat es el segundo espacio, siempre accesible.
+- **Hero** en la vista inicial (logo, titular, chips de características).
+- **Tarjetas contextuales** en el resumen: Plataforma, pasos del recorrido y proveedor.
+- **Card "Contexto de esta página"** en el chat (colapsable) con acceso directo al recorrido.
 - **Feedback / growth loop**: tras el análisis (y al terminar el recorrido) aparece una tarjeta "¿Te resultó útil?" con 5 estrellas + comentario opcional. Se envía a `POST /api/feedback` (guardado en InsForge) y un enlace "Calificar en Chrome Web Store" apunta al ID real de la extensión. Se muestra máximo 1 vez cada 24 h.
 - **Sugerencias rápidas en el chat**: 3 chips con preguntas contextuales (usando la plataforma detectada) que se envían de un clic.
-- El chat combina preguntas libres + tarjetas de acceso rápido para acciones frecuentes.
 
 ## Comportamiento del recorrido (FASE 3)
 

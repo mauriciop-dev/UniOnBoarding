@@ -72,9 +72,21 @@ const state = {
   isSpeaking: false
 };
 
+let lastMainView = 'idle';
+
 function showView(name) {
   Object.values(views).forEach(v => v.classList.remove('active'));
   views[name].classList.add('active');
+  if (name !== 'chat') lastMainView = name;
+  const chatTab = $('tab-chat');
+  const inicioTab = $('tab-inicio');
+  if (chatTab) chatTab.classList.toggle('active', name === 'chat');
+  if (inicioTab) inicioTab.classList.toggle('active', name !== 'chat');
+}
+
+function switchTab(name) {
+  if (name === 'chat') showView('chat');
+  else showView(lastMainView);
 }
 
 function setLoadingText(text) { $('loading-text').textContent = text; }
@@ -248,8 +260,38 @@ function renderSummary(data, meta) {
   state.analysis = data;
   state.tourSteps = Array.isArray(data.interactive_tour) ? data.interactive_tour : [];
   $('start-tour-btn').hidden = state.tourSteps.length === 0;
+  fillContextCards(pa, meta);
+  fillChatContext(pa);
   showView('summary');
   maybeShowFeedback();
+}
+
+function fillContextCards(pa, meta) {
+  const cards = $('context-cards');
+  if (!cards) return;
+  $('card-platform').textContent = pa.detected_platform_name || '—';
+  $('card-steps').textContent = state.tourSteps.length ? `${state.tourSteps.length} pasos` : '—';
+  $('card-provider').textContent = meta.provider || '—';
+  cards.hidden = false;
+}
+
+function fillChatContext(pa) {
+  const cc = $('chat-context');
+  if (!cc) return;
+  const body = $('chat-context-body');
+  const lines = [];
+  if (state.pageTitle) lines.push(`📄 ${state.pageTitle}`);
+  lines.push(`🏷 ${pa.detected_platform_name || 'Página analizada'}`);
+  lines.push(`👣 ${state.tourSteps.length} pasos de recorrido`);
+  body.textContent = lines.join('\n');
+  if (state.tourSteps.length) {
+    const btn = document.createElement('button');
+    btn.className = 'ghost cc-start';
+    btn.textContent = 'Iniciar recorrido';
+    btn.addEventListener('click', () => startTour());
+    body.appendChild(btn);
+  }
+  cc.hidden = false;
 }
 
 const FEEDBACK_TTL_MS = 24 * 60 * 60 * 1000;
@@ -571,6 +613,8 @@ function wire() {
       sendChatMessage();
     }
   });
+  $('tab-inicio').addEventListener('click', () => switchTab('inicio'));
+  $('tab-chat').addEventListener('click', () => switchTab('chat'));
   document.querySelectorAll('.avatar-opt').forEach((btn) => {
     btn.addEventListener('click', () => setAvatar(btn.dataset.avatar));
   });
