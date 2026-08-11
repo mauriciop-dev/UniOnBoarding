@@ -1,0 +1,92 @@
+================================================================================
+HOJA DE RUTA Y ARQUITECTURA TÉCNICA - PROONBOARDING v2.0
+================================================================================
+
+1. EJES DE DESARROLLO Y MEJORAS
+--------------------------------------------------------------------------------
+EJE 1: Interacción, IA Multimodal y Personalización
+- Tutoría conversacional por voz: Permite conversación fluida e interactiva mediante audio bidireccional en tiempo real.
+- Visión y contexto multimodal: Análisis en tiempo real de la pantalla (frames/DOM), voz del usuario e integración opcional de cámara para interpretar reacciones.
+- Avatares y personalización: Selección de 3 avatares semi-transparentes (hombre, mujer, bot) con voces diferenciadas para acompañar la explicación sin obstruir la vista.
+
+EJE 2: Asistencia Inteligente y Contexto Profundo
+- Búsqueda de documentación externa: Capacidad de indexar y consultar documentación oficial, subpáginas o el sitio completo para fundamentar las respuestas.
+- Modo Q&A interactivo: Evolución del audio-resumen estático hacia un chat reactivo capaz de responder cómo lograr acciones específicas dentro del sitio.
+- Navegación predictiva: Inferencia proactiva de los siguientes botones o pasos que el usuario podría requerir según el contexto de la página.
+
+EJE 3: Experiencia de Usuario (UX/UI) e Interfaz Visual
+- Orquestación y sincronización: Eliminación total del desfase entre la alocución de voz y el resaltado/marcado de elementos en el DOM.
+- Flujo interactivo condicional: Detección de clics por parte del usuario tras una instrucción; si no actúa, el asistente realiza una pausa y ofrece ayuda.
+- Etiquetas dinámicas y mini-bot: Despliegue de call-to-actions y notas contextuales en los focos resaltados, acompañados por una versión reducida del avatar.
+
+EJE 4: Panel Lateral (Side Panel) y Crecimiento de Producto
+- Evolución del Side Panel: Espacio híbrido que integra chat interactivo y tarjetas de información útil personalizada.
+- Bucle de retroalimentación (Growth): Módulo en la barra lateral para capturar feedback e invitar a calificar la extensión en la Chrome Web Store.
+
+--------------------------------------------------------------------------------
+2. ARQUITECTURA TÉCNICA HÍBRIDA Y LÓGICA DE EVENTOS
+--------------------------------------------------------------------------------
+A. Motor Principal: Gemini Multimodal Live API (WebSocket)
+- Conexión persistente bidirectional sobre `wss://`.
+- Captura de audio: PCM 16kHz enviado en chunks continuos.
+- Captura de contexto visual: Frames periódicos (1 FPS / JPEG) + payload de nodos clave del DOM.
+- Manejo de respuestas: Stream de audio PCM (24kHz) con ejecución en paralelo de Function Calling para interactuar con la interfaz web.
+
+B. Motor Secundario / Offline: Voicebox (`mauriciop-dev/voicebox`)
+- Servidor local/mecanismo de respaldo para TTS y STT en escenarios sin conectividad a Internet o caída del WebSocket.
+- Procesa la lectura de etiquetas estáticas, tarjetas del Side Panel y respuestas prefijadas para reducir costo de latencia en interacciones simples.
+
+C. Diagrama de Orquestación de Function Calling (Sincronización DOM/Voz)
+Gemini Live API (WebSocket)
+       │
+       ├─► Audio Stream (PCM 24kHz) ──► Reproducción directa (Web Audio API)
+       │
+       └─► Function Call Event ────────► Content Script (DOM Manipulation)
+            │                           ├─ Highlight Selector
+            │                           ├─ Inject Mini-Bot & Label
+            │                           └─ Add Click Event Listener (Condition Check)
+
+--------------------------------------------------------------------------------
+3. PROMPT DE INICIO PARA DESARROLLO EN OPEN CODE / DEEPSEEK V4
+--------------------------------------------------------------------------------
+
+[INICIO DEL PROMPT]
+
+Actúa como un Desarrollador Principal Senior especializado en Extensiones de Google Chrome (Manifest V3), WebSockets, Web Audio API y la API Multimodal de Gemini.
+
+Estamos actualizando la extensión "ProOnboarding" a su versión 2.0. El objetivo principal es transformarla de un generador de guías estáticas a un tutor virtual multimodal e interactivo en tiempo real.
+
+Contexto del Stack:
+- Extensión Manifest V3 (Background Service Worker, Side Panel, Content Scripts).
+- Motor de IA Principal: Gemini Multimodal Live API vía WebSockets (`wss://`).
+- Motor de Respaldo / Offline: Integración híbrida con Voicebox (`https://github.com/mauriciop-dev/voicebox`) para fallbacks de TTS/STT local.
+- IDE/Entorno: Open Code con DeepSeek V4.
+
+Metodología de Implementación (Fases):
+
+FASE 1: Infraestructura de Comunicación y Orquestación Voz/DOM
+- Configurar el Service Worker para gestionar la conexión WebSocket persistente con Gemini Live API.
+- Implementar la captura y streaming de audio PCM (16kHz) desde la extensión hacia la API.
+- Crear el receptor de Audio (Web Audio API a 24kHz) para reproducción fluida.
+- Diseñar el bus de eventos entre Gemini Function Calls y el Content Script para la manipulación y resaltado del DOM sin desfase.
+
+FASE 2: Capa Visión y Contexto Profundo
+- Implementar la captura periódica de pantalla (frames JPEG) y extracción optimizada del DOM para enviarlos como contexto multimodal a Gemini.
+- Integrar la búsqueda en segundo plano de documentación del sitio web para enriquecer la base de conocimiento del tutor.
+- Implementar el modo Q&A interactivo dentro del Side Panel.
+
+FASE 3: UI/UX Interactiva y Condicional
+- Crear el motor de resaltado de elementos con etiquetas dinámicas y versión mini del avatar explicativo.
+- Implementar la lógica de espera e interacción condicional (detectar si el usuario hace clic en el área indicada o pausar para consultar si necesita asistencia).
+- Desarrollar la selección de 3 avatares semi-transparentes (hombre, mujer, bot) con overlay no intrusivo.
+
+FASE 4: Side Panel, Growth y Respaldo Voicebox
+- Rediseñar el Side Panel para combinar chat, tarjetas contextuales y módulo de captura de feedback/calificación a la Chrome Web Store.
+- Integrar el fallback local con Voicebox para entornos sin conexión o respuesta rápida a UI fija.
+
+Instrucción de Trabajo:
+Por favor, comenzaremos ejecutando la FASE 1.
+Proporcióname la estructura de archivos del proyecto, la configuración del `manifest.json` adecuada para Manifest V3 con soporte de Side Panel y permisos de audio/captura, y el código modular para gestionar el WebSocket de Gemini Live API con la captura y reproducción de audio.
+
+[FIN DEL PROMPT]
+================================================================================

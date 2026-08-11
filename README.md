@@ -49,6 +49,35 @@ Backend serverless para la extensión Chrome **ProOnboarding**. Recibe un fragme
 ### `GET /api/health`
 Estado del servicio, proveedores configurados y conexión a InsForge.
 
+### `POST /api/tts`
+Sintetiza voz desde texto (capa L2 del motor de voz de la extensión, fallback <=> Web Speech local).
+
+**Body**
+```json
+{ "text": "Hola, soy tu guia.", "lang": "es", "engine": "deepgram" }
+```
+
+**Response 200**: audio binario (`audio/mpeg`, `Cache-Control: private`). Requiere `DEEPGRAM_API_KEY` configurada; si no, devuelve `503`. Si el cloud falla (429/5xx), la extensión degrada automáticamente a voz local y reanuda en el punto exacto.
+
+### `POST /api/chat`
+Chat conversacional (modo Q&A) sobre la página en análisis. Reusa la misma cadena de providers con retry/backoff.
+
+**Body**
+```json
+{
+  "message": "¿Cómo creo un reporte en esta página?",
+  "lang": "es",
+  "pageUrl": "https://aiprodig.com/",
+  "pageContext": "Plataforma: ...\nPasos del recorrido: ...",
+  "history": [{ "role": "user", "content": "..." }]
+}
+```
+
+**Response 200**
+```json
+{ "reply": "...", "provider": "bedrock", "elapsed_ms": 1200, "attempts": [] }
+```
+
 ---
 
 ## Arquitectura
@@ -62,11 +91,12 @@ Extensión Chrome
        ├──► InsForge (cache hit?) ──► JSON cacheado
        │                                ▲
        │                                │
-       └──► AI provider chain ◄─────────┘
-               1. Groq (llama-3.3-70b-versatile)
-               2. Gemini 2.0 Flash
-               3. DeepSeek Chat
-              (si uno falla, salta al siguiente)
+        └──► AI provider chain ◄─────────┘
+                1. Groq (llama-3.3-70b-versatile)
+                2. Gemini 2.0 Flash
+                3. DeepSeek Chat
+                4. AWS Bedrock Nova (texto)
+              (si uno falla, salta al siguiente; retry/backoff integrado)
 ```
 
 ---
@@ -100,6 +130,10 @@ O usa el script de prueba: `node scripts/test-local.js`
 | `GEMINI_API_KEY` | Recomendada | API key de Google AI Studio |
 | `GROQ_API_KEY` | Recomendada | API key de Groq Cloud (fallback rápido) |
 | `DEEPSEEK_API_KEY` | Opcional | API key de DeepSeek (fallback final) |
+| `AWS_BEDROCK_API_KEY` | Opcional | Bedrock API key (ABSK...) de AWS para Nova (texto) |
+| `AWS_BEDROCK_REGION` | Opcional | Región de Bedrock (default `us-east-1`) |
+| `AWS_BEDROCK_MODEL_ID` | Opcional | Modelo Nova (default `amazon.nova-lite-v1:0`) |
+| `DEEPGRAM_API_KEY` | Para TTS cloud | Key de Deepgram para `POST /api/tts` |
 | `INSFORGE_URL` | Recomendada | URL de tu backend InsForge |
 | `INSFORGE_API_KEY` | Recomendada | Project key (`ik_...`) |
 | `INSFORGE_ANON_KEY` | Opcional | Anon key (`eyJ...`) |
@@ -150,16 +184,21 @@ npx vercel --prod
 ```
 proonboarding-api/
 ├── api/
-│   ├── analyze-page.js     ← endpoint principal
-│   └── health.js           ← healthcheck con estado de providers e InsForge
+│   ├── analyze-page.js     ← endpoint principal POST
+│   ├── chat.js             ← chat Q&A (modo interactivo)
+│   ├── health.js           ← healthcheck con estado de providers e InsForge
+│   └── tts.js              ← síntesis de voz cloud (capa L2)
 ├── lib/
 │   ├── prompt-template.js  ← prompt validado para todos los providers
-│   ├── ai-provider.js      ← cadena Groq → Gemini → DeepSeek con fallback
-│   └── insforge-client.js  ← cliente REST para InsForge (cache)
+│   ├── ai-provider.js      ← cadena Groq → Gemini → DeepSeek → Bedrock (retry/backoff)
+│   ├── chat.js             ← cadena de chat conversacional
+│   ├── insforge-client.js  ← cliente REST para InsForge (cache)
+│   ├── cors.js             ← CORS restringido (chrome-extension://, localhost, vercel.app)
+│   └── tts-engines.js      ← motores de TTS cloud (Deepgram)
 ├── insforge-schema.sql     ← SQL para crear la tabla page_analyses
 ├── scripts/
 │   └── test-local.js       ← cliente de prueba contra el endpoint
-├── vercel.json             ← config CORS + maxDuration
+├── vercel.json             ← config maxDuration
 ├── package.json
 ├── .env.example
 └── README.md

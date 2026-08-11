@@ -1,11 +1,13 @@
 import crypto from 'node:crypto';
 import { analyzeWithFallback } from '../lib/ai-provider.js';
 import { getCachedAnalysis, storeAnalysis } from '../lib/insforge-client.js';
+import { applyCors, isPreflight } from '../lib/cors.js';
 
 const MAX_HTML_LENGTH = 30000;
 
 export default async function handler(req, res) {
-  if (req.method === 'OPTIONS') {
+  applyCors(req, res);
+  if (isPreflight(req)) {
     return res.status(204).end();
   }
 

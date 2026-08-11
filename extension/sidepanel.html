@@ -41,6 +41,7 @@
       <!-- Vista resumen -->
       <section id="view-summary" class="view">
         <div class="badge" id="badge-cached" hidden>Cache</div>
+        <div class="badge badge-provider" id="badge-provider" hidden></div>
         <h2 id="platform-name">Cargando...</h2>
         <p id="summary-text" class="summary"></p>
         <div class="actions">
@@ -49,6 +50,7 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
             Audio resumen
           </button>
+          <button id="ask-btn" class="ghost">Preguntar</button>
         </div>
         <details class="meta-details">
           <summary>Detalles tecnicos</summary>
@@ -61,6 +63,12 @@
         <div class="tour-header">
           <div class="step-indicator">
             Paso <span id="step-current">1</span> de <span id="step-total">1</span>
+          </div>
+          <span id="tts-layer" class="tts-layer" data-layer="local">Voz local</span>
+          <div class="avatar-row" title="Avatar del asistente">
+            <button class="avatar-opt" data-avatar="bot" aria-label="Bot">🤖</button>
+            <button class="avatar-opt" data-avatar="man" aria-label="Hombre">👨‍💻</button>
+            <button class="avatar-opt" data-avatar="woman" aria-label="Mujer">👩‍💻</button>
           </div>
           <div class="progress"><div id="progress-bar" class="progress-bar"></div></div>
         </div>
@@ -78,6 +86,19 @@
           <button id="next-btn" class="primary">Siguiente</button>
         </div>
         <button id="exit-tour-btn" class="link">Salir del recorrido</button>
+      </section>
+
+      <!-- Vista chat -->
+      <section id="view-chat" class="view">
+        <div class="chat-top">
+          <button id="chat-back-btn" class="ghost">Resumen</button>
+          <span class="chat-title">Pregunta sobre la pagina</span>
+        </div>
+        <div id="chat-messages" class="chat-messages"></div>
+        <div class="chat-composer">
+          <textarea id="chat-input" rows="2" placeholder="Ej: ¿Como hago X en esta pagina?"></textarea>
+          <button id="chat-send" class="primary" disabled>Enviar</button>
+        </div>
       </section>
 
       <!-- Vista error -->

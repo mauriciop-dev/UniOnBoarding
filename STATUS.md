@@ -2,16 +2,17 @@
 
 > **Convención**: cuando el usuario escriba **"retomar"**, leer este archivo completo antes de responder. Contiene el estado del proyecto, problemas conocidos y próximos pasos.
 
-Última actualización: 2026-06-02.
+Última actualización: 2026-08-11 (v2.0 — Fases 0–3).
 
 ---
 
 ## 1. ¿Qué es ProOnboarding?
 
-Extensión Chrome (MV3) + API serverless en Vercel que analiza cualquier página web con IA y guía al usuario con un recorrido interactivo (audio TTS + resaltado de elementos).
+Extensión Chrome (MV3) + API serverless en Vercel que analiza cualquier página web con IA y guía al usuario con un recorrido interactivo (audio TTS + resaltado de elementos + chat Q&A).
 
 - **Repo**: https://github.com/mauriciop-dev/UniOnBoarding
 - **API producción**: https://uni-on-boarding-idcs.vercel.app
+- **Vercel**: scope `mauricios-projects-d3659c9b` / proyecto `uni-on-boarding-idcs`
 - **Owner**: mauriciop-dev
 
 ---
@@ -21,193 +22,159 @@ Extensión Chrome (MV3) + API serverless en Vercel que analiza cualquier página
 ```
 proonboarding-api/
 ├── api/
-│   ├── analyze-page.js     ← endpoint principal POST
-│   └── health.js           ← GET /api/health
+│   ├── analyze-page.js     ← endpoint principal POST (análisis + tour)
+│   ├── chat.js             ← POST /api/chat (modo Q&A interactivo)
+│   ├── health.js           ← GET /api/health (estado de providers)
+│   └── tts.js              ← POST /api/tts (síntesis cloud, capa L2)
 ├── lib/
 │   ├── prompt-template.js  ← prompt del sistema (JSON schema estricto)
-│   ├── ai-provider.js      ← cadena Groq → Gemini → DeepSeek
+│   ├── ai-provider.js      ← cadena Groq → Gemini → DeepSeek → Bedrock (retry/backoff 25s)
+│   ├── chat.js             ← cadena conversacional de chat (mismos 4 providers)
+│   ├── cors.js             ← CORS restringido (chrome-extension://, localhost, vercel.app)
+│   ├── tts-engines.js      ← motores de TTS cloud (Deepgram)
 │   └── insforge-client.js  ← cliente REST para InsForge (caché)
 ├── extension/              ← Extensión Chrome MV3
 │   ├── manifest.json
-│   ├── background.js       ← service worker (abre side panel)
-│   ├── sidepanel.html / .css / .js
-│   ├── content.js / .css   ← inyectado en cada página
-│   ├── dom-cleaner.js      ← (ELIMINADO, ahora inline en content.js)
+│   ├── background.js       ← service worker (abre side panel + inyecta content)
+│   ├── sidepanel.html / .css / .js  ← UI: resumen, tour, chat, avatar
+│   ├── ai-engine.js        ← cliente del API de análisis
+│   ├── tts-provider.js     ← motor de voz por capas (L1 gemini_live / L2 cloud / L3 local)
+│   ├── content.js / .css   ← limpieza DOM + overlay de etiquetas + flujo condicional
 │   ├── icons/icon{16,48,128}.png
 │   ├── scripts/generate-icons.mjs
 │   └── README.md
 ├── insforge-schema.sql
-├── vercel.json
+├── vercel.json             ← maxDuration por función
 ├── package.json
+├── .env.local              ← NO subir a git (contiene claves)
 ├── .env.example
-├── .gitignore              ← incluye "nul" (archivo huérfano Windows)
 ├── STATUS.md               ← este archivo
+├── AjustesAgosto.txt       ← ruta/arquitectura v2.0 (hoja de ruta)
 └── README.md
 ```
 
 ---
 
-## 3. Lo que YA funciona
+## 3. Lo que YA funciona (v2.0)
 
-✅ **API desplegada en Vercel** (commit `5cec567`, v0.2.0)
-✅ **Endpoint `/api/health`** responde 200 con estado de los 3 providers e InsForge
-✅ **Caché en InsForge** funcional (tabla `page_analyses` con `dom_hash`)
-✅ **Extensión Chrome carga correctamente** en modo unpacked
-✅ **Side panel se abre** al hacer clic en el icono
-✅ **Botón "Esta página"** extrae el DOM limpio y lo envía al API
-✅ **Content script** resalta elementos y maneja `wait_for_click` e `input_required`
-✅ **TTS** con Web Speech API (voces del sistema)
-✅ **Groq responde** con `llama-3.3-70b-versatile` y devuelve JSON válido del schema
-✅ **CORS abierto** a `*` para que la extensión pueda llamar desde cualquier sitio
+✅ **API desplegada en Vercel** con 4 providers en cadena: **Groq → Gemini → DeepSeek → Bedrock Nova (texto)**. Retry/backoff + presupuesto total de 25 s por análisis (`lib/ai-provider.js`).
 
-### Commits importantes (de más reciente a más antiguo)
+✅ **Healthcheck** (`/api/health`) reporta los 4 providers reachable (incluye mini-Converse a Bedrock).
 
-| Hash      | Mensaje                                                                          |
-|-----------|----------------------------------------------------------------------------------|
-| `bb8ca77` | fix(ai-provider): reorder chain so Groq is primary, Gemini as fallback           |
-| `c71f66f` | fix(ai-provider): update model names to current (gemini-2.0-flash, llama-3.3-70b-versatile) |
-| `a67549c` | fix(extension): inline dom-cleaner into content.js                               |
-| `cb8c6f6` | feat: Chrome extension v0.1.0 (MV3 side panel)                                  |
-| `5cec567` | feat: ProOnboarding API v0.2.0                                                   |
+✅ **Caché**: InsForge (`page_analyses` con `dom_hash`) + caché local 24 h en `chrome.storage.local`.
+
+✅ **CORS endurecido** vía `lib/cors.js` (chrome-extension://, localhost, vercel.app).
+
+✅ **Extensión** (MV3, side panel): análisis, resumen con chip de provider, tour interactivo.
+
+✅ **TTS por capas** (`tts-provider.js`): L1 Gemini Live (stub, inactivo), L2 cloud (`/api/tts` Deepgram, pendiente key), L3 Web Speech local (activo por defecto). Chip `#tts-layer` muestra la capa activa.
+
+✅ **Chat Q&A** (FASE 2): `POST /api/chat` + vista de chat en el panel (burbujas, historial por turnos, indicador "escribiendo").
+
+✅ **FASE 3 (UI/UX interactiva y condicional)**:
+- Etiquetas dinámicas + mini-avatar sobre el elemento resaltado (overlay `proob-layer`).
+- Flujo condicional: 2 clics fuera o 25 s sin acción → ayuda in-page con **Repetir**/**Continuar** (y **Saltar** en `input_required`).
+- 3 avatares semi-transparentes (🤖 bot / 👨‍💻 hombre / 👩‍💻 mujer), persistentes, con voz Web Speech según género (best-effort).
 
 ---
 
-## 4. Problema actual (lo que se rompió)
+## 4. Estado de los providers (verificado en prod)
 
-**Síntoma**: después de UNA respuesta exitosa de Groq (~1.5s, 6 pasos de tour), la extensión ahora muestra **"Todos los proveedores de IA fallaron"** consistentemente.
+| Provider  | Modelo                  | Estado                                                |
+|-----------|-------------------------|-------------------------------------------------------|
+| Groq      | `llama-3.3-70b-versatile` | ✅ reachable (principal)                              |
+| Gemini    | `gemini-2.0-flash`        | ✅ reachable (fallback 2)                             |
+| DeepSeek  | `deepseek-chat`           | ✅ reachable (fallback 3)                             |
+| Bedrock   | `AWS_BEDROCK_MODEL_ID`    | ✅ reachable (4º fallback, NOVA con clave ABSK solo texto) |
 
-**Causa probable**: rate limit / quota de Groq free tier. Las claves gratuitas tienen límites muy bajos por minuto/día. Una sola llamada con prompt largo (~2000 tokens de system prompt + HTML) puede agotar la cuota rápidamente.
-
-**Estado real de los 3 providers** (verificado con `curl` al endpoint):
-
-| Provider  | Modelo                  | Estado                                                                |
-|-----------|-------------------------|-----------------------------------------------------------------------|
-| Groq      | `llama-3.3-70b-versatile` | ⚠️ Funcionó 1 vez, luego rate limit (free tier muy restringido)       |
-| Gemini    | `gemini-2.0-flash`        | ❌ 429 quota: 0 (este modelo ya no está en free tier)                |
-| DeepSeek  | `deepseek-chat`           | ❌ 402 Insufficient Balance (cuenta sin saldo)                        |
-
-**Cadena actual en `lib/ai-provider.js`**: `Groq → Gemini → DeepSeek` (orden cambiado en `bb8ca77`).
+> Nota: Bedrock Nova solo sirve texto vía Converse (clave ABSK). Para **voz** (Nova Sonic) se requiere credencial IAM SigV4 o una `DEEPGRAM_API_KEY`; hasta entonces la voz queda en capa L3 local.
 
 ---
 
-## 5. Idea del usuario para resolverlo
+## 5. Idea pendiente de explorar (incompleta)
 
-El usuario mencionó que **Google está desplegando Gemini Nano en Chrome** (integrado en el navegador, sin API key, sin costos). Si el navegador lo soporta, se podría usar como provider principal o único, eliminando la dependencia de servicios externos.
-
-### Prompt API de Chrome (Built-in AI)
-
-- Disponible detrás de un flag/origin trial en algunas versiones de Chrome
-- Acceso desde la extensión con `window.ai.languageModel` (o similar) o a través de `chrome.aiOriginTrial`
-- Modelos: Gemini Nano (on-device)
-- Sin rate limit, sin costo, sin latencia de red
-- Limitaciones: ventana de contexto menor, solo en navegadores compatibles
-
-### Pasos para investigarlo cuando se retome
-
-1. Verificar si el Chrome del usuario tiene el flag: `chrome://flags/#prompt-api-for-gemini-nano`
-2. Activar y reiniciar Chrome
-3. Confirmar versión de Chrome (necesita ~127+ con flag, o join al origin trial)
-4. Probar en consola: `await window.ai.languageModel.capabilities()`
-5. Si está disponible, crear un cuarto provider en `lib/ai-provider.js` que use la API built-in
-6. Hacer ese provider el primero de la cadena (o el único si es suficiente)
-7. Mantener Groq/Gemini/DeepSeek como fallback para navegadores sin Nano
-
-### Referencia
-
-- https://developer.chrome.com/docs/ai/built-in-apis
-- https://developer.chrome.com/docs/ai/prompt-api
-- Origin trial: https://developer.chrome.com/origintrials/#/view_trial/3378833026832343057
+**Gemini Nano (Built-in AI de Chrome)** — el usuario mencionó desplegarlo en Chrome sin API key. Si el navegador lo soporta, sería provider local sin costo. Referencia: `https://developer.chrome.com/docs/ai/built-in-apis`.
 
 ---
 
 ## 6. Próximos pasos (en orden de prioridad)
 
-### Inmediato (cuando se retome)
+### FASE 4 (siguiente, según `AjustesAgosto.txt`)
+- [ ] **Side Panel v2**: rediseño que combine chat, tarjetas contextuales y módulo de feedback/calificación (Chrome Web Store).
+- [ ] **Respaldo Voicebox** (`mauriciop-dev/voicebox`): fallback TTS/STT local para sin conexión.
+- [ ] Activar capa L1 **Gemini Live** (WebSocket, requiere credencial/IAM).
 
-- [ ] **Confirmar disponibilidad de Gemini Nano** en el Chrome del usuario
-- [ ] Si Nano está disponible: implementar provider built-in
-- [ ] Si Nano NO está disponible: evaluar plan pago de Groq o Gemini (Groq Dev tier es $0.59/M tokens, suficiente para testear)
-
-### Corto plazo
-
-- [ ] Manejar el caso de rate limit de Groq con **retry exponencial** antes de saltar al siguiente provider
-- [ ] **Cachear localmente** los `dom_hash` ya analizados (en `chrome.storage.local`) para no volver a llamar a la API en análisis repetidos
-- [ ] Mostrar en la UI qué provider respondió (ya viene en `_meta.provider`, solo hay que mostrarlo)
-- [ ] **Fallback de selector**: si `querySelector` falla en el content script, buscar por texto visible del `title` del paso
-- [ ] Soporte para `lang` automático según el idioma de la página (usar `document.documentElement.lang`)
-
-### Medio plazo (mejoras de producto)
-
-- [ ] **Detección de frustración**: si el usuario hace clic 3 veces en un botón sin cambio, auto-activar el tour
-- [ ] **Onboarding contextual proactivo**: al detectar un campo crítico vacío, sugerir acción
-- [ ] **Dashboard para empresas premium** (capa B2B mencionada en `IdeaInicial.txt`)
-- [ ] **Traducción automática** del audio a idioma del usuario
-- [ ] **Persistencia del tour**: si el usuario cierra y vuelve, ofrecer continuar donde quedó
-
-### Limpieza técnica pendiente
-
-- [ ] Quitar `nul` del repo si vuelve a aparecer (ya está en `.gitignore`)
-- [ ] Agregar tests unitarios para `validateShape` y `cleanDOM`
-- [ ] Lint con ESLint en CI
-- [ ] Empaquetar la extensión para distribución (`.zip` y publicarla en Chrome Web Store)
+### Pendientes técnicos / producto
+- [ ] Fallback de selector por texto visible cuando `querySelector` falle.
+- [ ] Soporte `lang` automático según la página (`document.documentElement.lang`).
+- [ ] Detección de frustración / onboarding contextual proactivo.
+- [ ] Tests unitarios para `validateShape` / `cleanDOM`; lint en CI.
+- [ ] Empaquetar y publicar en Chrome Web Store.
 
 ---
 
-## 7. Variables de entorno (referencia)
+## 7. Variables de entorno
 
-Definidas en Vercel (Settings → Environment Variables):
+Definidas en Vercel (Settings → Environment Variables) y en `.env.local` (NO subir a git):
 
-| Variable             | Estado       | Notas                                          |
-|----------------------|--------------|------------------------------------------------|
-| `GROQ_API_KEY`       | ✅ configurada | `gsk_...`                                       |
-| `GEMINI_API_KEY`     | ✅ configurada | `AIza...`                                       |
-| `DEEPSEEK_API_KEY`   | ✅ configurada | `sk-...` (cuenta sin saldo)                     |
-| `INSFORGE_URL`       | ✅ configurada |                                                |
-| `INSFORGE_API_KEY`   | ✅ configurada | `ik_...`                                        |
-| `INSFORGE_ANON_KEY`  | ✅ configurada | `eyJ...` (opcional)                             |
+| Variable               | Estado        | Notas                                        |
+|------------------------|---------------|----------------------------------------------|
+| `GROQ_API_KEY`         | ✅ configurada | `gsk_...`                                     |
+| `GEMINI_API_KEY`       | ✅ configurada | `AIza...`                                     |
+| `DEEPSEEK_API_KEY`     | ✅ configurada | `sk-...`                                      |
+| `AWS_BEDROCK_API_KEY`  | ✅ configurada | Sensitive; solo texto (Converse)              |
+| `AWS_BEDROCK_REGION`   | ✅ configurada |                                              |
+| `AWS_BEDROCK_MODEL_ID` | ✅ configurada |                                              |
+| `DEEPGRAM_API_KEY`     | ⬜ pendiente   | activa la capa L2 de voz                      |
+| `INSFORGE_URL`         | ✅ configurada |                                              |
+| `INSFORGE_API_KEY`     | ✅ configurada | `ik_...`                                      |
+| `INSFORGE_ANON_KEY`    | ✅ configurada | `eyJ...` (opcional)                           |
 
 ---
 
 ## 8. Decisiones de diseño importantes
 
-- **MV3 side panel** en vez de popup: según `IdeaInicial.txt`, barra lateral es el estándar moderno y permite mantener el tour activo mientras el usuario navega.
-- **CORS abierto a `*`**: permite que la extensión funcione en cualquier web. Para producción real, endurecer a `chrome-extension://...`.
-- **TTS con Web Speech API**: gratis, sin API key, pero depende de voces del SO. Para mejor calidad, considerar Google Cloud TTS o ElevenLabs en futuro.
-- **Content script como IIFE**: Chrome no soporta `import` en content scripts (bug que ya se arregló inlineando `dom-cleaner`).
-- **Selector CSS del API**: confiamos en que la IA devuelve selectores válidos. Si no, mostrar toast y continuar.
-- **InsForge como caché**: clave es el `dom_hash` (sha256 del HTML limpio). Hit de caché ahorra la llamada a la IA.
+- **MV3 side panel** en vez de popup (estándar moderno; mantiene el tour activo al navegar).
+- **Cadena de 4 providers** con retry/backoff y presupuesto total: un fallo no rompe el análisis.
+- **CORS endurecido** por denylist de orígenes conocidos (chrome-extension://, localhost, vercel.app).
+- **TTS por capas** con degradación automática cloud → local y reanudo por chunk.
+- **Avatar persistente** (`proob.avatar`) → icono en overlay + género de voz Web Speech (best-effort).
+- **InsForge como caché** de 2º nivel; caché local como 1º nivel.
 
 ---
 
-## 9. Comandos útiles
+## 9. Problemas conocidos
+
+- **`.env.local`**: `vercel link --yes` puede regenerarlo añadiendo entradas `VERCEL_*`. Revisar duplicados antes de desplegar. Nunca commitear.
+- **Voz cloud inactiva**: falta `DEEPGRAM_API_KEY` (o IAM para Nova Sonic). El chip mostrará "Voz local".
+- **`.gitignore`** incluye `nul` (archivo huérfano Windows) si reaparece.
+
+---
+
+## 10. Comandos útiles
 
 ```bash
 # Desarrollo local del API
 npx vercel dev
-# Health check local
-curl http://localhost:3000/api/health
-# Test analyze local
-node scripts/test-local.js
-
+# Health check
+curl https://uni-on-boarding-idcs.vercel.app/api/health
+# Chat
+curl -X POST https://uni-on-boarding-idcs.vercel.app/api/chat -H "Content-Type: application/json" \
+  -d '{"message":"Hola","lang":"es"}'
 # Despliegue producción
 npx vercel --prod
-
-# Ver logs de un deployment
-# Ir a https://vercel.com/mauriciop-dev/uni-on-boarding-idcs
-
-# Regenerar iconos placeholder
+# Regenerar iconos
 node extension/scripts/generate-icons.mjs
 ```
 
 ---
 
-## 10. Próxima sesión — checklist
+## 11. Próxima sesión — checklist
 
-Cuando el usuario escriba "retomar":
+Cuando el usuario escriba **"retomar"**:
 
 1. **Leer este archivo completo** ✅
-2. Preguntar qué quiere atacar primero (Nano, rate limit, otra cosa)
-3. Si va por Nano: guiar paso a paso la verificación de disponibilidad
-4. Si va por rate limit: decidir entre plan pago o implementar retry/backoff
-5. Hacer commit pequeño y verificable por cambio
-6. Probar en la extensión antes de cerrar la sesión
+2. Confirmar en qué fase se sigue (por defecto **FASE 4** del documento `AjustesAgosto.txt`).
+3. Si se retoma algo de voz: tener a mano `DEEPGRAM_API_KEY` o credencial IAM.
+4. Revisar `.env.local` antes de desplegar (posibles duplicados tras `vercel link`).
+5. Hacer commits pequeños y verificables por cambio, y probar en la extensión antes de cerrar la sesión.

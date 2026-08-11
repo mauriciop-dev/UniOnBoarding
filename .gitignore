@@ -9,3 +9,8 @@ Thumbs.db
 .vscode/
 .idea/
 tmp/
+
+.vercel
+.env*
+nul
+*.zip

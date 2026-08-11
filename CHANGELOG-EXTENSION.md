@@ -1,5 +1,40 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.5 — FASE 3: UI/UX interactiva y condicional
+
+**Etiquetas dinamicas + mini-avatar en el DOM:**
+- `content.js` crea un overlay flotante (`proob-layer`) anclado al elemento del
+  tour con una etiqueta tipo chip: mini-avatar + titulo del paso + CTA opcional.
+- Reposiciona en scroll/resize; se limpia al cambiar de paso o salir del tour.
+
+**Flujo condicional con ayuda in-page:**
+- `wait_for_click`: tras 2 clics fuera del destino o 25s sin accion, el overlay
+  muestra "Parece que necesitas ayuda" con botones **Repetir** (re-arma la
+  espera) y **Continuar** (resuelve `{ok:false, completed:false}`).
+- `input_required`: timeout de 25s -> ayuda con **Volver a intentar** /
+  **Saltar** (resuelve `{ok:false, completed:false, skipped:true}`).
+- El side panel refleja el resultado en el hint (`action-hint`) sin bloquear el
+  recorrido.
+
+**3 avatares semi-transparentes (bot / hombre / mujer):**
+- Selector persistente (`proob.avatar`) en el header del tour.
+- El avatar cambia el icono del mini-avatar en la pagina (mensaje
+  `PROOB_AVATAR`) y la voz de Web Speech (heuristica de genero en
+  `tts-provider.js`, best-effort segun voces instaladas).
+
+**Archivos tocados:**
+- `extension/content.js` — overlay de etiquetas, ayuda condicional, PROOB_AVATAR
+- `extension/content.css` — estilos de label/cta/help
+- `extension/sidepanel.js` — selector de avatar, payload de highlight, hints
+- `extension/sidepanel.html` — `.avatar-row` en tour-header
+- `extension/sidepanel.css` — estilos `.avatar-opt`
+- `extension/tts-provider.js` — `voiceGender` + heuristica de voces
+
+**Nota:** FASE 3 es solo cliente (extension). No requiere redeploy del API.
+Se valido el flujo con harness de DOM (happy path, ayuda, input, avatar).
+
+---
+
 ## 0.1.3 (fix 3) — Inyeccion directa desde onClicked, no via message al background
 
 **Problema:** `openPanelOnActionClick: true` impide que `onClicked` se

@@ -1,7 +1,11 @@
 import { healthCheck as insforgeHealth } from '../lib/insforge-client.js';
 import { listProvidersStatus } from '../lib/ai-provider.js';
+import { applyCors, isPreflight } from '../lib/cors.js';
 
 export default async function handler(req, res) {
+  applyCors(req, res);
+  if (isPreflight(req)) return res.status(204).end();
+
   const [insforge, providers] = await Promise.all([
     insforgeHealth(),
     listProvidersStatus()

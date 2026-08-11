@@ -10,10 +10,11 @@ extension/
 ├── background.js              # Service worker: abre el side panel al hacer clic
 ├── sidepanel.html             # UI principal del panel lateral
 ├── sidepanel.css
-├── sidepanel.js               # Lógica UI, fetch al API, TTS, tour
-├── content.js                 # Inyectado en cada página: limpieza DOM + overlay
-├── content.css                # Estilos del resaltado y toast
-├── dom-cleaner.js             # Utilidad para serializar DOM limpio
+├── sidepanel.js               # Lógica UI, fetch al API, chat, tour
+├── ai-engine.js               # Cliente del API de análisis (cloud)
+├── tts-provider.js            # Motor de voz unificado (cloud TTS / Web Speech local)
+├── content.js                 # Inyectado en cada página: limpieza DOM + overlay + flujo condicional
+├── content.css                # Estilos del resaltado, etiquetas, ayuda y toast
 ├── icons/                     # icon16, icon48, icon128
 ├── scripts/
 │   └── generate-icons.mjs     # Regenera los iconos placeholder
@@ -71,6 +72,15 @@ Si quieres iterar con el backend en `localhost`:
 
 - **URL del API**: por defecto la producción. Cambiable desde el engranaje.
 - **Idioma**: `es` (default), `en`, `pt`, `fr`. Afecta al contenido generado por la IA y a la voz TTS.
+- **Avatar del asistente**: selector en el header del recorrido (🤖 bot, 👨‍💻 hombre, 👩‍💻 mujer). Persistido localmente (`proob.avatar`). Cambia el mini-avatar flotante en la página y, en lo posible, el género de la voz TTS local (best-effort según voces instaladas).
+
+## Comportamiento del recorrido (FASE 3)
+
+- Cada paso **resalta** su elemento y muestra una **etiqueta flotante** (mini-avatar + título) con una nota contextual (`cta`).
+- Flujo condicional:
+  - `wait_for_click`: si haces 2 clics fuera del destino o no actúas en 25 s, aparece "Parece que necesitas ayuda" con **Repetir** y **Continuar**.
+  - `input_required`: tras 25 s sin escribir, ayuda con **Volver a intentar** y **Saltar**.
+- El panel lateral refleja el resultado (skipped/continuado) en el hint, sin bloquear el recorrido.
 
 ## Comportamiento esperado
 

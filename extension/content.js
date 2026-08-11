@@ -69,9 +69,16 @@
     return (h >>> 0).toString(16);
   }
 
+  const AVATAR_ICONS = { bot: '🤖', man: '👨\u200D💻', woman: '👩\u200D💻' };
+  const STEP_WAIT_MS = 25000;
+
   let currentHighlighted = null;
   let pendingResolve = null;
   let currentHandlers = [];
+  let proobLayer = null;
+  let waitTimer = null;
+  let wrongClicks = 0;
+  let overlayCleanup = null;
 
   function findElement(selector) {
     if (!selector) return null;
@@ -87,6 +94,7 @@
       currentHighlighted.classList.remove('proob-highlight');
       currentHighlighted = null;
     }
+    hideOverlay();
     cleanupHandlers();
   }
 
@@ -106,7 +114,80 @@
     setTimeout(() => t.remove(), 3000);
   }
 
-  function highlightStep({ selector, action_type }) {
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  function ensureLayer() {
+    if (proobLayer && proobLayer.isConnected) return proobLayer;
+    proobLayer = document.createElement('div');
+    proobLayer.className = 'proob-layer';
+    proobLayer.style.display = 'none';
+    document.body.appendChild(proobLayer);
+    return proobLayer;
+  }
+
+  function setOverlayContent(html) {
+    const layer = ensureLayer();
+    layer.style.display = 'block';
+    layer.innerHTML = html;
+    return layer;
+  }
+
+  function positionOverlay(el) {
+    const layer = ensureLayer();
+    const rect = el.getBoundingClientRect();
+    let top = rect.top - 74;
+    if (top < 10) top = rect.bottom + 14;
+    const left = Math.min(Math.max(rect.left + rect.width / 2, 96), Math.max(window.innerWidth - 96, 96));
+    layer.style.left = `${left}px`;
+    layer.style.top = `${top}px`;
+  }
+
+  function bindOverlayReposition(el) {
+    overlayCleanup?.();
+    const onMove = () => { if (el.isConnected) positionOverlay(el); };
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', onMove);
+    overlayCleanup = () => {
+      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('resize', onMove);
+    };
+  }
+
+  function hideOverlay() {
+    if (proobLayer) proobLayer.style.display = 'none';
+    overlayCleanup?.();
+    overlayCleanup = null;
+  }
+
+  function updateAvatarIcon(avatar) {
+    const a = ensureLayer().querySelector('.proob-avatar');
+    if (a) a.textContent = AVATAR_ICONS[avatar] || AVATAR_ICONS.bot;
+  }
+
+  function renderOverlay(el, opts) {
+    const avatarIcon = AVATAR_ICONS[opts.avatar] || AVATAR_ICONS.bot;
+    const parts = [`<div class="proob-label"><span class="proob-avatar">${avatarIcon}</span>`];
+    if (opts.label) parts.push(`<span class="proob-label-title">${escapeHtml(opts.label)}</span>`);
+    parts.push('</div>');
+    if (opts.cta) parts.push(`<div class="proob-cta">${escapeHtml(opts.cta)}</div>`);
+    if (opts.help) {
+      parts.push('<div class="proob-help">');
+      parts.push(`<div class="proob-help-text">${escapeHtml(opts.helpText || '¿Necesitas ayuda?')}</div>`);
+      if (opts.onRetry) parts.push(`<button class="proob-help-btn retry">${escapeHtml(opts.helpRetryLabel || 'Repetir')}</button>`);
+      if (opts.onContinue) parts.push(`<button class="proob-help-btn primary">${escapeHtml(opts.helpContinueLabel || 'Continuar')}</button>`);
+      parts.push('</div>');
+    }
+    const layer = setOverlayContent(parts.join(''));
+    positionOverlay(el);
+    layer.querySelector('.proob-help-btn.retry')?.addEventListener('click', () => opts.onRetry());
+    layer.querySelector('.proob-help-btn.primary')?.addEventListener('click', () => opts.onContinue());
+  }
+
+  function highlightStep({ selector, action_type, label, cta, avatar }) {
     clearHighlight();
     const el = findElement(selector);
     if (!el) {
@@ -116,31 +197,83 @@
     el.classList.add('proob-highlight');
     currentHighlighted = el;
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    bindOverlayReposition(el);
+
+    const stopTimer = () => { if (waitTimer) { clearTimeout(waitTimer); waitTimer = null; } };
 
     if (action_type === 'wait_for_click') {
       return new Promise(resolve => {
-        const handler = (ev) => {
-          if (!currentHighlighted || !currentHighlighted.contains(ev.target)) return;
-          cleanupHandlers();
-          resolve({ ok: true, completed: true });
+        const showHelp = () => {
+          wrongClicks = 0;
+          renderOverlay(el, {
+            label, cta: null, avatar,
+            help: true,
+            helpText: 'Parece que necesitas ayuda con este paso.',
+            helpRetryLabel: 'Ver de nuevo',
+            helpContinueLabel: 'Continuar',
+            onRetry: () => arm(),
+            onContinue: () => finish(false)
+          });
         };
-        currentHandlers.push({ el: document, type: 'click', handler });
+        const arm = () => {
+          stopTimer();
+          wrongClicks = 0;
+          renderOverlay(el, { label, cta, avatar });
+          waitTimer = setTimeout(showHelp, STEP_WAIT_MS);
+        };
+        const finish = (ok, extra) => {
+          cleanupHandlers();
+          hideOverlay();
+          resolve({ ok, completed: ok, ...extra });
+        };
+        const handler = (ev) => {
+          if (proobLayer?.contains(ev.target)) return;
+          if (!currentHighlighted || !currentHighlighted.contains(ev.target)) {
+            wrongClicks += 1;
+            if (wrongClicks >= 2) showHelp();
+            return;
+          }
+          finish(true);
+        };
         document.addEventListener('click', handler, true);
+        currentHandlers.push({ el: document, type: 'click', handler });
         pendingResolve = resolve;
+        arm();
       });
     }
 
     if (action_type === 'input_required') {
       return new Promise(resolve => {
-        const handler = () => {
-          if (el.value && el.value.trim().length > 0) {
-            cleanupHandlers();
-            resolve({ ok: true, completed: true, value: el.value });
-          }
+        const showHelp = () => {
+          wrongClicks = 0;
+          renderOverlay(el, {
+            label, cta: null, avatar,
+            help: true,
+            helpText: 'Escribe algo en el campo resaltado para continuar.',
+            helpRetryLabel: 'Volver a intentar',
+            helpContinueLabel: 'Saltar',
+            onRetry: () => arm(),
+            onContinue: () => finish(false, { skipped: true })
+          });
         };
-        currentHandlers.push({ el, type: 'input', handler });
+        const arm = () => {
+          stopTimer();
+          wrongClicks = 0;
+          renderOverlay(el, { label, cta, avatar });
+          waitTimer = setTimeout(showHelp, STEP_WAIT_MS);
+        };
+        const finish = (ok, extra) => {
+          cleanupHandlers();
+          hideOverlay();
+          resolve({ ok, completed: ok, ...extra });
+        };
+        const handler = () => {
+          if (el.value && el.value.trim().length > 0) finish(true, { value: el.value });
+        };
         el.addEventListener('input', handler);
+        currentHandlers.push({ el, type: 'input', handler });
         pendingResolve = resolve;
+        arm();
       });
     }
 
@@ -161,6 +294,12 @@
 
     if (msg?.type === 'PROOB_HIGHLIGHT') {
       highlightStep(msg.payload).then(result => sendResponse(result));
+      return true;
+    }
+
+    if (msg?.type === 'PROOB_AVATAR') {
+      updateAvatarIcon(msg.avatar);
+      sendResponse({ ok: true });
       return true;
     }
 
