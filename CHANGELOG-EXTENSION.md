@@ -1,5 +1,13 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.9 — Deepgram L2 activo en producción
+
+- La key provista daba **401** porque `lib/tts-engines.js` usaba `Authorization: Bearer`; Deepgram REST exige **`Authorization: Token <key>`** (verificado contra su API). Corregido.
+- Los modelos `aura-2-thalia-es`/`helios-en`/`luzia-pt`/`lys-fr` **no existen** (400). Catálogo real consultado en `/v1/models` y mapeado por **canonical_name**: `aura-2-selena-es`, `aura-2-thalia-en`, `aura-2-agathe-fr`, `aura-2-cesare-it`, `aura-2-elara-de`, `aura-2-uzume-ja`, `aura-2-beatrix-nl` (pt cae a es).
+- Verificado: síntesis OK en es/en/fr/it/de/pt local, y `POST /api/tts` en prod → 200 `audio/mpeg`. Key `DEEPGRAM_API_KEY` agregada a Vercel env (production).
+
+---
+
 ## 0.1.8 — Voicebox: contrato real /profiles + /generate/stream
 
 - La capa L3 usaba un contrato genérico (`POST /tts` con `{text, lang}`) que NO existia en Voicebox. Se releyo el repo (`mauriciop-dev/voicebox`, FastAPI en `127.0.0.1:17493`) y se alineo al contrato real: `GET /profiles` (primera voz clonada) y `POST /generate/stream` con `{profile_id, text, language}` → stream `audio/wav` por chunk, header `X-Voicebox-Client-Id: proonboarding-extension`.

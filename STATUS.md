@@ -83,7 +83,7 @@ proonboarding-api/
 - **Feedback / growth loop**: tarjeta de estrellas + comentario en el panel (1 vez/24 h), `POST /api/feedback` → tabla `feedback` en InsForge (migración aplicada, verificado `stored:true`). Enlace a Chrome Web Store con el ID real de la extensión.
 - **Sugerencias rápidas** en el chat (chips contextuales con la plataforma detectada).
 - **Capa Voicebox** configurable en `tts-provider.js` (L3): **contrato real verificado** en `mauriciop-dev/voicebox` → `GET /profiles` (primera voz clonada) + `POST /generate/stream` con `{profile_id, text, language}` → WAV stream por chunk (header `X-Voicebox-Client-Id`). URL base configurable en Configuración (`http://127.0.0.1:17493`). Degrada a Web Speech si falla.
-- **L2 Deepgram (parcial)**: motor implementado en `lib/tts-engines.js` (models Aura-2 por idioma), endpoint `/api/tts` listo, pero la key provista devuelve **401 INVALID_AUTH** → pendiente key válida de Deepgram para habilitar la nube en prod.
+- **L2 Deepgram (ACTIVO en prod)**: `lib/tts-engines.js` sintetiza con modelos **Aura-2** verificados vía catálogo real (`/v1/models`), auth `Authorization: Token <key>` (no Bearer), modelos por canonical_name (`aura-2-selena-es`, `aura-2-thalia-en`, etc.; pt cae a es). Verificado: `POST /api/tts` en prod → 200 `audio/mpeg` (26 KB). Key `DEEPGRAM_API_KEY` añadida a Vercel env (production).
 
 ---
 
