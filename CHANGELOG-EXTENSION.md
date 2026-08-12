@@ -1,5 +1,17 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.22 — Diagnostico de silencio en la captura del microfono
+
+- `peak: 0` confirma que el microfono del offscreen captura silencio (los chunks fluyen pero son ceros).
+- Se instrumenta el grafo de audio en 3 puntos para ubicar donde nace el cero:
+  1. **Nivel crudo** `proob:micpeak` (AnalyserNode sobre la stream, antes del worklet) → `nivel microfono crudo (offscreen): N%`.
+  2. **Peak del chunk al salir del offscreen** (`msg.peak` en `proob:pcm`).
+  3. **Peak recomputado en el sidepanel** (`chunk aqui`) → separa "worklet/stream silenciosa" de "mensajeria pierde datos".
+- Ademas, en la pagina de permiso (`request-mic.html`) ahora hay un **medidor de nivel en vivo** con barra: si Chrome captura tu voz en una pagina visible, la barra sube; si queda en 0, el problema es el microfono/Chrome, no el offscreen.
+- `getSettings()` del track de audio se loguea en el offscreen (deviceId/sampleRate/channelCount).
+
+---
+
 ## 0.1.21 — Diagnostico de amplitud del microfono (Gemini no detecta voz)
 
 - Los chunks PCM llegan al sidepanel pero Gemini no envia `serverContent`. Se instrumento el listener del microfono para reportar:

@@ -14,6 +14,12 @@
   <h1>Permiso de microfono de ProOnboarding</h1>
   <p>Para usar el Modo Voz (hablar con el asistente) hace falta el microfono.</p>
   <button id="ask">Pedir permiso de microfono</button>
+  <div id="meter" hidden>
+    <p id="meterLabel"></p>
+    <div style="width:100%;height:10px;background:#e5e7eb;border-radius:6px;overflow:hidden;">
+      <div id="meterBar" style="width:0%;height:100%;background:#22c55e;"></div>
+    </div>
+  </div>
   <p id="status"></p>
   <script src="request-mic.js"></script>
 </body>

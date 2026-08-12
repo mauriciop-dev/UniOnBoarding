@@ -446,19 +446,28 @@ export class RealtimeVoiceSession {
   async _startOffscreenMic() {
     await this._ensureOffscreenDoc();
     this._micListener = (msg) => {
-      if (msg && msg.type === 'proob:pcm' && this._provider) {
+      if (!msg) return;
+      if (msg.type === 'proob:micpeak') {
+        this._micpeakCount = (this._micpeakCount || 0) + 1;
+        if (this._micpeakCount === 1 || this._micpeakCount % 8 === 1) {
+          console.log('[proob] nivel microfono crudo (offscreen):', ((msg.peak || 0) * 100).toFixed(1) + '%');
+        }
+        return;
+      }
+      if (msg.type === 'proob:pcm' && this._provider) {
         this._pcmCount = (this._pcmCount || 0) + 1;
-        if (this._pcmCount === 1 || this._pcmCount % 200 === 0) {
+        let peak = -1;
+        try {
           const buf = (msg.data && msg.data.buffer) ? msg.data.buffer : msg.data;
-          let peak = 0;
-          try {
-            const arr = new Int16Array(buf);
-            for (let i = 0; i < arr.length; i++) {
-              const v = arr[i] < 0 ? -arr[i] : arr[i];
-              if (v > peak) peak = v;
-            }
-          } catch { /* dato no Int16 */ }
-          console.log('[proob] chunks PCM en sidepanel:', this._pcmCount, '| peak:', peak, '| envios fallidos:', this._pcmFail || 0);
+          const arr = new Int16Array(buf);
+          peak = 0;
+          for (let i = 0; i < arr.length; i++) {
+            const v = arr[i] < 0 ? -arr[i] : arr[i];
+            if (v > peak) peak = v;
+          }
+        } catch { /* dato no Int16 */ }
+        if (this._pcmCount === 1 || this._pcmCount % 200 === 0) {
+          console.log('[proob] chunks PCM en sidepanel:', this._pcmCount, '| chunk aqui:', peak, '| chunk al salir del offscreen:', msg.peak, '| envios fallidos:', this._pcmFail || 0);
         }
         const ok = this._provider.sendAudio(msg.data);
         if (ok === false) this._pcmFail = (this._pcmFail || 0) + 1;

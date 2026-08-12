@@ -5,13 +5,25 @@
 // microfono. El permiso se concede primero desde request-mic.html (pagina
 // visible de la extension); despues de eso getUserMedia funciona aqui sin UI.
 
-const capture = { stream: null, ctx: null, src: null, node: null };
+const capture = { stream: null, ctx: null, src: null, node: null, peakTimer: null };
+
+function peakOfInt16(buf) {
+  const arr = new Int16Array(buf);
+  let peak = 0;
+  for (let i = 0; i < arr.length; i++) {
+    const v = arr[i] < 0 ? -arr[i] : arr[i];
+    if (v > peak) peak = v;
+  }
+  return peak;
+}
 
 async function start() {
   stop();
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }
   });
+  const track = stream.getAudioTracks()[0];
+  console.log('[proob] mic stream settings:', JSON.stringify(track.getSettings()), 'enabled:', track.enabled, 'muted:', track.muted, 'readyState:', track.readyState);
   const ctx = new AudioContext();
   await ctx.resume();
   await ctx.audioWorklet.addModule('voice-worklet.js');
@@ -19,17 +31,32 @@ async function start() {
   const node = new AudioWorkletNode(ctx, 'proob-mic-capture');
   node.port.onmessage = (e) => {
     if (!capture._logged) { capture._logged = true; console.log('[proob] PCM del microfono llegando al offscreen'); }
-    chrome.runtime.sendMessage({ type: 'proob:pcm', data: e.data });
+    chrome.runtime.sendMessage({ type: 'proob:pcm', data: e.data, peak: peakOfInt16(e.data) });
   };
   src.connect(node);
   node.connect(ctx.destination); // imprescindible: sin conexion a destination el worklet no procesa
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 1024;
+  src.connect(analyser);
+  const td = new Uint8Array(analyser.fftSize);
+  const peakTimer = setInterval(() => {
+    analyser.getByteTimeDomainData(td);
+    let p = 0;
+    for (let i = 0; i < td.length; i++) {
+      const v = Math.abs((td[i] - 128) / 128);
+      if (v > p) p = v;
+    }
+    chrome.runtime.sendMessage({ type: 'proob:micpeak', peak: p });
+  }, 500);
   capture.stream = stream;
   capture.ctx = ctx;
   capture.src = src;
   capture.node = node;
+  capture.peakTimer = peakTimer;
 }
 
 function stop() {
+  if (capture.peakTimer) { clearInterval(capture.peakTimer); capture.peakTimer = null; }
   if (capture.stream) capture.stream.getTracks().forEach((t) => t.stop());
   if (capture.src) { try { capture.src.disconnect(); } catch { } }
   if (capture.node) { try { capture.node.port.close(); } catch { } }
