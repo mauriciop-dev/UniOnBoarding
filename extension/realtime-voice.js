@@ -398,6 +398,7 @@ export class RealtimeVoiceSession {
       ? chrome.runtime.getURL('voice-worklet.js')
       : 'voice-worklet.js';
     await ctx.audioWorklet.addModule(workletUrl);
+    if (ctx.state === 'suspended') await ctx.resume();
     this._sinkNode = new AudioWorkletNode(ctx, 'proob-sink');
     this._sinkNode.connect(ctx.destination);
 
@@ -432,6 +433,7 @@ export class RealtimeVoiceSession {
       if (this._provider) this._provider.sendAudio(e.data);
     };
     src.connect(this._micNode);
+    this._micNode.connect(ctx.destination); // sin esto el worklet de captura no procesa
   }
 
   // Captura en documento offscreen (patron oficial de Chrome: el sidepanel y el
@@ -474,6 +476,10 @@ export class RealtimeVoiceSession {
   }
 
   _play({ pcm16, rate }) {
+    if (!this._playedLogged) {
+      this._playedLogged = true;
+      console.log('[proob] audio de respuesta de Gemini llegando a la sesion');
+    }
     if (this._sinkNode) this._sinkNode.port.postMessage({ type: 'pcm16', data: pcm16, rate });
   }
 

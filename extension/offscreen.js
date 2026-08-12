@@ -18,9 +18,11 @@ async function start() {
   const src = ctx.createMediaStreamSource(stream);
   const node = new AudioWorkletNode(ctx, 'proob-mic-capture');
   node.port.onmessage = (e) => {
+    if (!capture._logged) { capture._logged = true; console.log('[proob] PCM del microfono llegando al offscreen'); }
     chrome.runtime.sendMessage({ type: 'proob:pcm', data: e.data });
   };
   src.connect(node);
+  node.connect(ctx.destination); // imprescindible: sin conexion a destination el worklet no procesa
   capture.stream = stream;
   capture.ctx = ctx;
   capture.src = src;

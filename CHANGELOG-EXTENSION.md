@@ -1,5 +1,15 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.18 — Fix "escucha pero nunca responde": el worklet de microfono no procesaba
+
+- **CAUSA RAIZ**: en Web Audio, un `AudioWorkletNode` NO ejecuta `process()` si no está conectado a `destination` (no forma parte del grafo de render). El nodo `proob-mic-capture` existia pero nunca generaba chunks de PCM16 → a Gemini jamas le llegaba audio del microfono → "voz activa" pero sin respuesta.
+- Fix en `offscreen.js` y en la ruta inline de `realtime-voice.js`: `src.connect(node); node.connect(ctx.destination);` (el nodo emite silencio, no genera eco).
+- `_setupAudio`: se reanuda el `AudioContext` si quedó suspended.
+- Logs de diagnostico (primer chunk PCM del microfono / primer audio de respuesta de Gemini) para distinguir entrada vs salida en la consola del sidepanel.
+- Harness: 54/54 + 19/19 OK.
+
+---
+
 ## 0.1.17 — Fix del hang "Conectando..." en Modo Voz
 
 - **CAUSA RAIZ encontrada (validada contra Google con tu key)**: el servidor de Gemini Live entrega los mensajes JSON del WebSocket como **Blob/binario** y se hacía `JSON.parse(ev.data)` directo → el parseo fallaba en silencio → `setupComplete` nunca se procesaba → el panel quedaba "Conectando..." para siempre.
