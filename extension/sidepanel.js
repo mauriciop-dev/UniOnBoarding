@@ -643,6 +643,12 @@ function setVoiceStatus(text, cls = '') {
 
 function mapVoiceStatus(s) {
   setVoiceStatus(VOICE_STATUS_TEXT[s] || s, s === 'listo' ? 'live' : '');
+  if (s === 'desconectado') {
+    state.voiceSession = null;
+    const btn = $('voice-btn');
+    if (btn) btn.classList.remove('active');
+    if ($('voice-btn-label')) $('voice-btn-label').textContent = 'Hablar';
+  }
 }
 
 function safeParseJson(text) {

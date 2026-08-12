@@ -1,5 +1,14 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.16 — Diagnóstico de cierre + audio de respuesta de Gemini
+
+- **Gemini Live no reproducía la respuesta por voz**: la sesión no conectaba `onAudio` del provider al worklet de salida (solo se veía el texto por `outputTranscription`). Ahora el audio PCM del `serverContent` se reproduce por el sink.
+- **Cierre inesperado ya no queda mudo**: los providers reportan el `code`/`reason` del `onclose` y la UI muestra "La sesión de voz se cerró: <motivo>" en vez de volver en silencio a "Voz desactivada/conectando". Si el servidor cierra (p. ej. por el token efímero), el usuario ve el motivo real.
+- **Carrera de arranque corregida**: si la sesión se detiene mientras se prepara el micrófono (offscreen), ya no se abre un WebSocket huérfano que dejaba "Conectando..." eterno; `start()` verifica `_running` antes de conectar.
+- `ctx.resume()` en el offscreen para garantizar que el contexto de audio corra aunque el navegador lo ponga en suspenso.
+
+---
+
 ## 0.1.15 — Micrófono con offscreen document (patrón oficial de Chrome)
 
 - **El sidepanel y el popup no pueden mostrar el prompt de `getUserMedia`** (bug conocido de Chromium: `NotAllowedError: Permission dismissed` sin preguntar). Solución oficial de Chrome: **capturar el micrófono en un `offscreen document` con razón `USER_MEDIA`** y pedir el permiso una vez desde una página visible (`request-mic.html` abierta en pestaña). El PCM16 viaja del offscreen al sidepanel vía `chrome.runtime.sendMessage` (`proob:pcm`) y de ahí al WebSocket.

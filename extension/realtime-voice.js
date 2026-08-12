@@ -101,7 +101,7 @@ export class GeminiLiveProvider {
     };
     ws.onmessage = (ev) => this._onSocketMessage(ev);
     ws.onerror = () => this.onError?.(new Error('Error de WebSocket Gemini Live'));
-    ws.onclose = () => this.onClose?.();
+    ws.onclose = (e) => this.onClose?.({ code: e && e.code, reason: (e && e.reason) || '' });
   }
 
   _onSocketMessage(ev) {
@@ -225,7 +225,7 @@ export class DeepgramAgentProvider {
     };
     ws.onmessage = (ev) => this._onSocketMessage(ev);
     ws.onerror = () => this.onError?.(new Error('Error de WebSocket Deepgram Agent'));
-    ws.onclose = () => this.onClose?.();
+    ws.onclose = (e) => this.onClose?.({ code: e && e.code, reason: (e && e.reason) || '' });
   }
 
   _onSocketMessage(ev) {
@@ -304,7 +304,8 @@ export class RealtimeVoiceSession {
       onTurnComplete: (why) => this._onTurnComplete(why),
       onStatus: (s) => this._cb.onStatus?.(s),
       onError: (e) => this._cb.onError?.(e),
-      onClose: () => this._onProviderClose()
+      onClose: (info) => this._onProviderClose(info),
+      onAudio: (a) => this._play(a)
     };
 
     const token = (voiceToken && voiceToken.provider === provider) ? voiceToken : null;
@@ -338,6 +339,7 @@ export class RealtimeVoiceSession {
     if (this._running) return;
     this._running = true;
     await this._setupAudio();
+    if (!this._running) return; // stop() ocurrio mientras se preparaba el audio
     this._provider.connect();
   }
 
@@ -465,11 +467,15 @@ export class RealtimeVoiceSession {
     this._cb.onTurnComplete?.();
   }
 
-  _onProviderClose() {
-    if (this._running) {
-      this.stop();
-      this._cb.onStatus?.('desconectado');
-    }
+  _onProviderClose(info) {
+    const wasRunning = this._running;
+    this.stop();
+    if (!wasRunning) return;
+    this._cb.onStatus?.('desconectado');
+    const code = info && info.code;
+    const reason = info && info.reason ? String(info.reason) : '';
+    const detail = reason || (typeof code === 'number' ? `código ${code}` : '');
+    this._cb.onError?.(new Error(`La sesión de voz se cerró${detail ? `: ${detail}` : '.'}`));
   }
 
   async stop() {

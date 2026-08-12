@@ -13,6 +13,7 @@ async function start() {
     audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }
   });
   const ctx = new AudioContext();
+  await ctx.resume();
   await ctx.audioWorklet.addModule('voice-worklet.js');
   const src = ctx.createMediaStreamSource(stream);
   const node = new AudioWorkletNode(ctx, 'proob-mic-capture');
