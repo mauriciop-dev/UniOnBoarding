@@ -80,11 +80,25 @@
   let wrongClicks = 0;
   let overlayCleanup = null;
 
+  function escapeClassTokens(str) {
+    const esc = (s) => (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(s) : s;
+    return String(str)
+      .split(/(?=[.#])/)
+      .map((seg) => seg.startsWith('.') ? '.' + esc(seg.slice(1)) : seg)
+      .join('');
+  }
+
   function findElement(selector) {
     if (!selector) return null;
     try { return document.querySelector(selector); }
     catch (e) {
-      console.warn('[ProOnboarding] selector invalido:', selector, e.message);
+      const repaired = escapeClassTokens(selector);
+      try {
+        const el = repaired !== selector ? document.querySelector(repaired) : null;
+        if (el) return el;
+      } catch { /* sin reparacion posible */ }
+      console.warn('[ProOnboarding] selector invalido:', selector,
+        repaired !== selector ? `-> reparado: ${repaired}` : e.message);
       return null;
     }
   }
