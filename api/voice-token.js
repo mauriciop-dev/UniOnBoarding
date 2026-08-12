@@ -21,7 +21,7 @@ async function postJson(url, { headers = {}, body, timeoutMs = 15000 }) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error(data?.error?.message || data?.description || `HTTP ${res.status}`);
+    const err = new Error(data?.error?.message || data?.err_msg || data?.description || `HTTP ${res.status}`);
     err.status = res.status;
     throw err;
   }
@@ -48,10 +48,20 @@ async function mintGeminiToken({ geminiKey, model }) {
 }
 
 async function mintDeepgramToken({ deepgramKey }) {
-  const data = await postJson(DEEPGRAM_GRANT_URL, {
-    headers: { Authorization: `Token ${deepgramKey}` },
-    body: { ttl: 60 }
-  });
+  let data;
+  try {
+    data = await postJson(DEEPGRAM_GRANT_URL, {
+      headers: { Authorization: `Token ${deepgramKey}` },
+      body: { ttl: 60 }
+    });
+  } catch (err) {
+    if (err.status === 403 || err.status === 401) {
+      const e = new Error(`Deepgram rechazó el token efímero (${err.status}): tu clave no tiene permiso para /v1/auth/grant.`);
+      e.status = 502;
+      throw e;
+    }
+    throw err;
+  }
   if (!data?.access_token) {
     const err = new Error('Deepgram no devolvio un access token.');
     err.status = 502;

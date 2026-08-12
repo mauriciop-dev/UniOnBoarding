@@ -90,7 +90,7 @@ Si quieres iterar con el backend en `localhost`:
 - **Proveedores**:
   - **Gemini Live**: WebSocket `wss://generativelanguage.googleapis.com/ws/.../BidiGenerateContent?key=…` (dev) o `...BidiGenerateContentConstrained?access_token=…` (producción con token efímero); mensajes JSON `setup` → `realtimeInput` → `serverContent` (transcripciones + `inlineData` PCM 24 kHz).
   - **Deepgram Agent**: `wss://agent.deepgram.com/v1/agent/converse`, auth `Sec-WebSocket-Protocol ['token', key|access_token]`, primero un Settings JSON (listen `nova-3` + think Google Gemini + speak Aura-2, salida PCM16 24 kHz). Con token del servidor usa el Google LLM gestionado por Deepgram; en dev, si hay `GEMINI_API_KEY`, se inyecta como BYO (`x-goog-api-key`).
-- El manifest pide `audioCapture` y expone `voice-worklet.js` como web-accessible resource.
+- El manifest expone `voice-worklet.js` como web-accessible resource. El micrófono se captura con `navigator.mediaDevices.getUserMedia` desde el sidepanel (no necesita `audioCapture`, que Chrome no permite en extensiones) y cada instalación pide el permiso de micrófono en el primer "Hablar".
 
 ## FASE 4 — Side panel híbrido y crecimiento
 

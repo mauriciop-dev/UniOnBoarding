@@ -342,25 +342,34 @@ export class RealtimeVoiceSession {
   }
 
   async _setupAudio() {
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices) return;
-    if (typeof AudioContext === 'undefined') return;
+    if (typeof AudioContext === 'undefined') {
+      throw new Error('AudioContext no disponible en este contexto.');
+    }
     const ctx = new AudioContext();
     this._audioCtx = ctx;
-    if (!ctx.audioWorklet || typeof ctx.audioWorklet.addModule !== 'function') return;
+    if (!ctx.audioWorklet || typeof ctx.audioWorklet.addModule !== 'function') {
+      throw new Error('AudioWorklet no disponible en este contexto.');
+    }
 
     const workletUrl = (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getURL)
       ? chrome.runtime.getURL('voice-worklet.js')
       : 'voice-worklet.js';
-    try {
-      await ctx.audioWorklet.addModule(workletUrl);
-    } catch (err) {
-      this._cb.onError?.(err);
-      return;
-    }
+    await ctx.audioWorklet.addModule(workletUrl);
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }
-    });
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }
+      });
+    } catch (err) {
+      const name = err && err.name ? err.name : '';
+      const detail = (err && err.message) || String(err);
+      const friendly = name === 'NotAllowedError' || name === 'PermissionDeniedError'
+        ? 'Chrome no concedió el micrófono (permítelo en el prompt o en el botón del candado del panel).'
+        : name === 'NotFoundError' ? 'No se encontró un micrófono conectado.'
+        : detail;
+      throw new Error(`Micrófono no disponible: ${friendly}`);
+    }
     this._stream = stream;
     const src = ctx.createMediaStreamSource(stream);
     this._micNode = new AudioWorkletNode(ctx, 'proob-mic-capture');

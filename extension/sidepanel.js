@@ -469,7 +469,7 @@ function deriveChatEndpoint(apiUrl) {
 
 async function fetchVoiceToken(provider) {
   const base = deriveApiBase(state.apiUrl);
-  if (!base) return null;
+  if (!base) return { error: 'API no configurada' };
   try {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), 10000);
@@ -480,12 +480,13 @@ async function fetchVoiceToken(provider) {
       body: JSON.stringify({ provider })
     });
     clearTimeout(id);
-    if (!res.ok) return null;
-    const data = await res.json().catch(() => null);
-    if (!data || !data.token) return null;
+    let data = null;
+    try { data = await res.json(); } catch { data = null; }
+    if (!res.ok) return { error: (data && data.error) || `HTTP ${res.status}` };
+    if (!data || !data.token) return { error: 'La API respondió sin token' };
     return { provider, token: data.token, model: data.model || null };
-  } catch {
-    return null;
+  } catch (err) {
+    return { error: err && err.name === 'AbortError' ? 'Timeout de tu API' : ((err && err.message) || 'Fallo de red') };
   }
 }
 
@@ -684,10 +685,11 @@ async function startVoice() {
   // clave directa solo en desarrollo.
   let voiceToken = await fetchVoiceToken(provider);
   let apiKey = '';
-  if (!voiceToken) {
+  if (!voiceToken.token) {
     apiKey = provider === REALTIME_PROVIDERS.DEEPGRAM_AGENT ? state.deepgramKey : state.geminiKey;
     if (!apiKey) {
-      setVoiceStatus('Voz no disponible: tu API no emite token y no hay key local', 'error');
+      const reason = voiceToken.error ? ` (${voiceToken.error})` : '';
+      setVoiceStatus(`Voz no disponible: tu API no emite token${reason} y no hay key local`, 'error');
       return;
     }
   }
@@ -736,7 +738,8 @@ async function stopVoice() {
   const btn = $('voice-btn');
   btn.classList.remove('active');
   $('voice-btn-label').textContent = 'Hablar';
-  setVoiceStatus('Voz desactivada');
+  const statusEl = $('voice-status');
+  if (!statusEl || !statusEl.classList.contains('error')) setVoiceStatus('Voz desactivada');
   if (s) { try { await s.stop(); } catch { void s.stop(); } }
 }
 

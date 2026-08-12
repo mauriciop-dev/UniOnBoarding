@@ -1,5 +1,14 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.14 — Fix de prueba manual en Chrome
+
+- **`audioCapture` fuera del manifest**: es inválido en extensiones (solo Chrome Apps). Chrome lo rechazaba con `'audioCapture' is only allowed for packaged apps`. El micrófono se captura con `navigator.mediaDevices.getUserMedia` desde el sidepanel; Chrome pide permiso en el primer "Hablar".
+- **Errores de voz ya no se ocultan**: `stopVoice()` no pisa un estado `error` con "Voz desactivada"; ahora el usuario ve el mensaje real (p. ej. `Micrófono no disponible: Chrome no concedió el micrófono...`).
+- **`/api/voice-token` ahora propaga el motivo real** cuando la API del servidor falla (se muestran el mensaje del server, `HTTP <status>` o timeout) en vez de un "no emite token" genérico.
+- **Deepgram `auth/grant` responde 403 (`Insufficient permissions`)**: el key actual no puede emitir tokens efímeros. El endpoint devuelve un mensaje claro al usuario (requiere addon Agent con permiso de grant). **Proveedor recomendado en este estado: Gemini Live** (principal, ya validado).
+
+---
+
 ## 0.1.13 — Validación en vivo del token efímero (3 bugs reales corregidos)
 
 - **Schema del setup de Gemini Live estaba mal**: la API rechaza `responseModalities` directo en `setup` (`Unknown name "responseModalities" at 'setup'`). Va dentro de **`generationConfig.responseModalities`** (junto a `speechConfig`). Corregido y verificado contra el WS real.
