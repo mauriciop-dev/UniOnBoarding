@@ -104,8 +104,8 @@ class ProobSink extends AudioWorkletProcessor {
   }
 
   process(outputs) {
-    const out = outputs[0];
-    if (!out) return true;
+    const out = outputs && outputs[0];
+    if (!out || !out.length || !out[0]) return true;
     const n = out[0].length;
     if (!this.suspended && this.queue.length) {
       const read = Math.min(n, this.queue.length);

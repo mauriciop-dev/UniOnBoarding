@@ -1,5 +1,13 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.19 — Fix crash del worklet de salida (audio de respuesta sin canales)
+
+- El `process()` de `proob-sink` explotaba con `Uncaught TypeError ... 'length'` cuando el nodo quedaba sin canales de salida (nodo huerfano de intentos previos / contexto cerrandose). Ahora se valida `outputs[0]` y sus canales antes de leer `length`.
+- `stop()` desconecta explicitamente `_micNode`/`_sinkNode` antes de cerrar el AudioContext, para no dejar worklets de sesiones anteriores procesando.
+- Nota: este error aparecia DESPUES de que el audio de respuesta llegaba al sink (el fix 0.1.18 de captura funciona): la meta ahora es que ese audio suene.
+
+---
+
 ## 0.1.18 — Fix "escucha pero nunca responde": el worklet de microfono no procesaba
 
 - **CAUSA RAIZ**: en Web Audio, un `AudioWorkletNode` NO ejecuta `process()` si no está conectado a `destination` (no forma parte del grafo de render). El nodo `proob-mic-capture` existia pero nunca generaba chunks de PCM16 → a Gemini jamas le llegaba audio del microfono → "voz activa" pero sin respuesta.

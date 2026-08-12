@@ -530,9 +530,9 @@ export class RealtimeVoiceSession {
     if (this._connectWatchdog) { clearTimeout(this._connectWatchdog); this._connectWatchdog = null; }
     try { if (this._provider) this._provider.close(); } catch { this._provider = null; }
     try { if (this._stream) this._stream.getTracks().forEach((t) => t.stop()); } catch { this._stream = null; }
+    if (this._micNode) { try { this._micNode.disconnect(); } catch { } this._micNode = null; }
+    if (this._sinkNode) { try { this._sinkNode.disconnect(); } catch { } this._sinkNode = null; }
     try { if (this._audioCtx) await this._audioCtx.close(); } catch { this._audioCtx = null; }
-    this._micNode = null;
-    this._sinkNode = null;
     await this._stopOffscreenMic();
   }
 }
