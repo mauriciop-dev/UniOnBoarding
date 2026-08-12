@@ -26,7 +26,8 @@ proonboarding-api/
 │   ├── chat.js             ← POST /api/chat (modo Q&A interactivo)
 │   ├── feedback.js         ← POST /api/feedback (calificaciones / growth loop)
 │   ├── health.js           ← GET /api/health (estado de providers)
-│   └── tts.js              ← POST /api/tts (síntesis cloud, capa L2)
+│   ├── tts.js              ← POST /api/tts (síntesis cloud, capa L2)
+│   └── voice-token.js      ← POST /api/voice-token (tokens efímeros para Modo Voz)
 ├── lib/
 │   ├── prompt-template.js  ← prompt del sistema (JSON schema estricto)
 │   ├── ai-provider.js      ← cadena Groq → Gemini → DeepSeek → Bedrock (retry/backoff 25s)
@@ -90,10 +91,11 @@ proonboarding-api/
 ✅ **FASE 5 — Modo Voz en tiempo real (implementado, código + harness)**:
 - `realtime-voice.js` (L1 Gemini Live directo + Deepgram Agent API) y `voice-worklet.js` (captura PCM16 16 kHz + sink remuestreado). 
 - **Gemini Live**: WebSocket `BidiGenerateContent` con `?key=` (usa la `GEMINI_API_KEY` ya configurada), mensajes JSON `setup` → `realtimeInput` → `serverContent` (transcripciones + audio 24 kHz).
-- **Deepgram Agent**: `wss://agent.deepgram.com/agent`, auth `Sec-WebSocket-Protocol ['token', key]` + Settings JSON (STT Deepgram + think Google + speak Aura-2).
+- **Deepgram Agent**: `wss://agent.deepgram.com/v1/agent/converse`, auth `Sec-WebSocket-Protocol ['token', key]` + Settings JSON (listen `nova-3` + think Google Gemini + speak Aura-2). La `GEMINI_API_KEY` del usuario se inyecta en el **payload del think** (`think.endpoint.headers['x-goog-api-key']`, BYO) — **sin vinculación en la consola de Deepgram**; si está vacía, usa el Google LLM gestionado por Deepgram.
 - UI integrada en el panel: barra de voz en el chat (Hablar/Detener, selector de proveedor, estado) y campos en Configuración (Gemini key/modelo, Deepgram key, Settings JSON). Transcript vuelca al chat con contexto de la página.
-- Manifest `0.1.10` (`audioCapture` + `voice-worklet.js` web-accessible).
-- Validado con harness WebSocket mock (35/35 PASS). **Pendiente prueba en vivo en Chrome** (mic + audio de respuesta).
+- Manifest `0.1.12` (`audioCapture` + `voice-worklet.js` web-accessible).
+- **Tokens efímeros (sin keys para el usuario)**: `POST /api/voice-token` mintea tokens de corta vida con tus keys de servidor (Gemini `auth_tokens` constrained / Deepgram `auth/grant`). La extensión pide el token en el arranque; **el usuario no configura nada**. Claves locales opcionales (solo dev). **Principal: Gemini Live** (la más económica, ~$0.012–0.023/min).
+- Validado con harness WebSocket mock + endpoint (`/api/voice-token`): 72/72 PASS. **Pendiente: deploy de la API** (para que el endpoint exista en prod) y prueba en vivo en Chrome.
 
 ---
 
@@ -123,7 +125,7 @@ proonboarding-api/
 - [x] **Sugerencias rápidas** en el chat (chips contextuales).
 - [x] **Side Panel v2**: rediseño visual completo que combine chat + tarjetas contextuales.
 - [x] **Capa Voicebox** configurable con el **contrato real** (`GET /profiles` + `POST /generate/stream`). Repo `mauriciop-dev/voicebox` accesible y alineado.
-- [x] **L1 Gemini Live** (FASE 5): WebSocket directo con `GEMINI_API_KEY` (sin IAM). + **Deepgram Agent** como segundo proveedor.
+- [x] **L1 Gemini Live** (FASE 5): WebSocket directo con `GEMINI_API_KEY` (sin IAM). + **Deepgram Agent** como segundo proveedor (think Google BYO con tu Gemini key en el payload, sin consola).
 - [ ] Probar el Modo Voz en vivo en Chrome (mic + reproducción) y ajustar worklets si es necesario.
 - [x] **L2 Deepgram (producción)**: modelos Aura-2 reales, auth `Token`, verificado en prod.
 
@@ -169,7 +171,7 @@ Definidas en Vercel (Settings → Environment Variables) y en `.env.local` (NO s
 ## 9. Problemas conocidos
 
 - **`.env.local`**: `vercel link --yes` puede regenerarlo añadiendo entradas `VERCEL_*`. Revisar duplicados antes de desplegar. Nunca commitear.
-- **Modo Voz**: código y worklets listos, validados solo con mock. Requiere **prueba en vivo en Chrome** (permiso de micrófono). **Deepgram Agent** necesita el proyecto habilitado y el modelo "think" (Google) vinculado en console.deepgram.com.
+- **Modo Voz**: código y worklets listos, validados solo con mock. Requiere **prueba en vivo en Chrome** (permiso de micrófono). Deepgram Agent: el "think" con Google usa tu `GEMINI_API_KEY` directamente en el payload (BYO) — la consola de Deepgram **no** se toca.
 - **`.gitignore`** incluye `nul` (archivo huérfano Windows) si reaparece.
 
 ---

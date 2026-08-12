@@ -1,5 +1,31 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.12 — Modo Voz sin keys para el usuario (tokens efimeros vía tu API)
+
+- **Problema de producto**: pedirle a un usuario común que genere y pegue una API key hace inviable distribuir la extensión (y expone la key en `chrome.storage`). Corregido con el patrón de **tokens efímeros**:
+  - Nuevo endpoint **`POST /api/voice-token`** (Vercel): con tus keys de servidor (`GEMINI_API_KEY` / `DEEPGRAM_API_KEY`) mintea un token de corta vida…
+    - **gemini_live** → `POST https://generativelanguage.googleapis.com/v1beta/auth_tokens` (`x-goog-api-key`, `uses:1`, constraints `responseModalities:["AUDIO"]`); el cliente conecta a `BidiGenerateContentConstrained?access_token=…`.
+    - **deepgram_agent** → `POST https://api.deepgram.com/v1/auth/grant` (`Authorization: Token …`, `ttl:60`); el cliente lo usa en el handshake `Sec-WebSocket-Protocol ['token', access_token]`.
+  - **La extensión** (`fetchVoiceToken`) pide el token a tu API en el arranque del Modo Voz. El usuario final **no configura nada**; las claves de Configuración quedan **opcionales** (solo fallback de desarrollo).
+- **Principal = Gemini Live** (la opción más económica): ~$0.012–0.023/min de conversación (input $0.005/min + output $0.018/min en `gemini-3.1-flash-live-preview`) vs ~$0.068–0.11/min del Deepgram Agent full-stack. Es el default del selector (etiqueta "más económico").
+- `RealtimeVoiceSession` acepta `voiceToken` (`{provider, token, model?}`): reemplaza la key que corresponda y, en Gemini, fuerza el endpoint **Constrained** y el modelo que devuelve el token.
+- Validado: 54/54 (providers/sesión) + 18/18 (endpoint `/api/voice-token`, mint + headers + errores). Recoda **desplegar** la API para que el endpoint exista en producción.
+
+---
+
+## 0.1.11 — Deepgram Agent: payload real corregido (think Google con TU Gemini key)
+
+- Mismo error conceptual que la L2 pero en el Agent: el schema de `Settings` no es el que asumimos. Corregido contra la doc real:
+  - Endpoint correcto: `wss://agent.deepgram.com/v1/agent/converse` (no `/agent`).
+  - `agent.think.provider.type` válidos: `open_ai` | `anthropic` | `aws_bedrock` | `google` | `groq` | `nvidia`. **No existe `type: 'deepgram'`** para "think" (eso rompía la sesión con `FAILED_TO_THINK`).
+  - Voz en `agent.speak.provider.model` (no `voice`). Listen por defecto `nova-3` (no `flux-general-multi`).
+- **La `GEMINI_API_KEY` se pasa en el payload del `Settings`** (BYO): si el usuario pone su key de Gemini en Ajustes, Deepgram llama a Google con esa key vía `think.endpoint.url` (`https://generativelanguage.googleapis.com/v1beta/models/<model>:streamGenerateContent?alt=sse`) + `headers.x-goog-api-key`. **No requiere vincular nada en la consola de Deepgram.** Con endpoint propio el `provider.model` no se usa: el modelo va en la URL.
+- Si la key de Gemini está vacía, el `think` usa el **Google LLM gestionado por Deepgram** (`type: 'google'`, `model: 'gemini-3.1-flash-lite'`, facturado por Deepgram) — sin key extra.
+- El campo "Gemini API key" del panel ahora tiene doble uso (Live y think del Agent); `RealtimeVoiceSession` propaga `geminiKey` al proveedor. Un `Settings JSON` custom se hace **deep-merge** sobre el default (preservando audio, voz y tu key).
+- Validado con harness: 48/48 PASS (endpoint, settings BYO/managed, merge parcial, transcripciones y audio).
+
+---
+
 ## 0.1.10 — Modo Voz en tiempo real (Gemini Live + Deepgram Agent)
 
 - **Nueva capa L5** en Modo Voz: conversación bidireccional por voz con dos proveedores:

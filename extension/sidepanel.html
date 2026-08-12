@@ -145,7 +145,7 @@
             <span id="voice-btn-label">Hablar</span>
           </button>
           <select id="voice-provider" class="voice-provider" title="Proveedor del modo voz">
-            <option value="gemini_live">Gemini Live</option>
+            <option value="gemini_live">Gemini Live (más económico)</option>
             <option value="deepgram_agent">Deepgram Agent</option>
           </select>
           <span id="voice-status" class="voice-status">Voz desactivada</span>
@@ -204,22 +204,22 @@
         <hr class="settings-sep" />
         <h4 class="settings-subtitle">Modo voz (realtime)</h4>
         <label>
-          Gemini API key (Live)
-          <input id="gemini-key-input" type="password" placeholder="AIza..." autocomplete="off" />
+          Gemini API key (Live / think de Agent) — opcional
+          <input id="gemini-key-input" type="password" placeholder="AIza... (solo dev)" autocomplete="off" />
         </label>
         <label>
           Modelo Gemini Live
           <input id="gemini-model-input" type="text" placeholder="gemini-3.1-flash-live-preview" />
         </label>
         <label>
-          Deepgram API key (Agent)
-          <input id="deepgram-key-input" type="password" placeholder="Token..." autocomplete="off" />
+          Deepgram API key (Agent) — opcional
+          <input id="deepgram-key-input" type="password" placeholder="Token... (solo dev)" autocomplete="off" />
         </label>
         <label>
           Agent Settings JSON (opcional)
           <textarea id="agent-settings-input" rows="4" placeholder='{"type":"Settings","audio":{...}}'></textarea>
         </label>
-        <p class="hint settings-hint">Las keys se guardan localmente en chrome.storage.local. La voz y el modelo del agente se configuran en el JSON de Settings (por defecto: voz Aura). Deepgram Agent requiere el proyecto habilitado y, si usas Google como "think", vincular el modelo en console.deepgram.com.</p>
+        <p class="hint settings-hint">En producción el Modo Voz pide a tu API un <b>token efímero</b> (creado con tus keys del servidor) y el usuario no configura nada. Las claves de esta sección son <b>opcionales</b> y se usan solo como fallback de desarrollo (chrome.storage.local, nunca a tu backend). El <b>Gemini API key</b> sirve para ambos proveedores; con Deepgram Agent se inyecta en el payload del "think" (BYO, sin tocar la consola de Deepgram).</p>
         <div class="modal-actions">
           <button id="settings-cancel" class="ghost">Cancelar</button>
           <button id="settings-save" class="primary">Guardar</button>

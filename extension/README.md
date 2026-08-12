@@ -1,4 +1,4 @@
-# ProOnboarding - Extensión Chrome (v0.1.10)
+# ProOnboarding - Extensión Chrome (v0.1.12)
 
 Extensión MV3 que consume la API de ProOnboarding desplegada en Vercel. Analiza la página actual, muestra un resumen y guía un recorrido interactivo con audio (TTS) y resaltado visual de elementos.
 
@@ -76,11 +76,11 @@ Si quieres iterar con el backend en `localhost`:
 - **Idioma**: `es` (default), `en`, `pt`, `fr`. Afecta al contenido generado por la IA y a la voz TTS.
 - **Avatar del asistente**: selector en el header del recorrido (🤖 bot, 👨‍💻 hombre, 👩‍💻 mujer). Persistido localmente (`proob.avatar`). Cambia el mini-avatar flotante en la página y, en lo posible, el género de la voz TTS local (best-effort según voces instaladas).
 - **Servidor local de voz (Voicebox, opcional)**: URL **base** del backend FastAPI de Voicebox (`http://127.0.0.1:17493`). Contrato real verificado: `GET /profiles` para resolver la primera voz clonada y `POST /generate/stream` con `{profile_id, text, language}` → stream `audio/wav`. Se usa cuando no hay conexión como fallback antes de las voces del sistema; si falla, degrada a Web Speech reanudando en el chunk exacto.
-- **Modo Voz (realtime, FASE 5)**:
-  - **Gemini API key (Live)**: `AIza…` (la misma `GEMINI_API_KEY`), + **Modelo Gemini Live** (default `gemini-3.1-flash-live-preview`). Conecta por WebSocket directo `BidiGenerateContent`.
-  - **Deepgram API key (Agent)**: Token del proyecto Deepgram. Conecta a `wss://agent.deepgram.com/agent` (STT + think Google + voz Aura). Requiere el proyecto con el agente habilitado y el modelo "think" vinculado en console.deepgram.com.
-  - **Agent Settings JSON (opcional)**: sobrescribe los Settings por defecto (voz Aura-2, think `gemini-3.1-flash-lite`, salida PCM16 24 kHz). Si se omite, se usa un default correcto.
-  - Las keys y preferencias se guardan en `chrome.storage.local` (nunca se envían al backend).
+- **Modo Voz (realtime, FASE 5)** — **sin keys para el usuario**:
+  - En producción el Modo Voz pide a tu API (`POST /api/voice-token`) un **token efímero** de corta vida, creado con tus keys de servidor (`GEMINI_API_KEY`/`DEEPGRAM_API_KEY`). El usuario final **no configura nada** y las keys reales nunca salen del servidor.
+  - **Principal: Gemini Live** (más económico, ~$0.012–0.023/min): el navegador conecta a `BidiGenerateContentConstrained?access_token=…` con el token mints por el servidor.
+  - **Alternativa: Deepgram Agent** (`wss://agent.deepgram.com/v1/agent/converse`): usa el `access_token` del `/v1/auth/grant` en el handshake `Sec-WebSocket-Protocol ['token', token]`. El "think" usa el Google LLM gestionado por Deepgram (sin Gemini key propia).
+  - **Campos de Configuración (Gemini/Deepgram/Agent): opcionales, solo fallback de desarrollo** — si tu API no emite token (ej. `vercel dev` sin env), usa las claves locales; si no hay ninguna, avisa. Guardadas en `chrome.storage.local`, nunca a tu backend.
 
 ## FASE 5 — Modo Voz en tiempo real
 
@@ -88,8 +88,8 @@ Si quieres iterar con el backend en `localhost`:
 - **Conversación bidireccional**: el micrófono se captura en un AudioWorklet (PCM16 16 kHz) y se envía al proveedor; la respuesta de audio se reproduce por otro worklet remuestreado al rate del contexto (`proob-sink`).
 - **Transcript en el chat**: lo que dices y la respuesta del asistente aparecen como burbujas del chat, con el contexto de la página (plataforma + pasos) inyectado en el prompt del agente.
 - **Proveedores**:
-  - **Gemini Live**: WebSocket `wss://generativelanguage.googleapis.com/ws/.../BidiGenerateContent?key=…`, mensajes JSON `setup` → `realtimeInput` → `serverContent` (transcripciones + `inlineData` PCM 24 kHz).
-  - **Deepgram Agent**: `wss://agent.deepgram.com/agent`, auth `Sec-WebSocket-Protocol ['token', key]`, primero un Settings JSON (STT Deepgram + think Google + speak Aura-2, salida PCM16 24 kHz).
+  - **Gemini Live**: WebSocket `wss://generativelanguage.googleapis.com/ws/.../BidiGenerateContent?key=…` (dev) o `...BidiGenerateContentConstrained?access_token=…` (producción con token efímero); mensajes JSON `setup` → `realtimeInput` → `serverContent` (transcripciones + `inlineData` PCM 24 kHz).
+  - **Deepgram Agent**: `wss://agent.deepgram.com/v1/agent/converse`, auth `Sec-WebSocket-Protocol ['token', key|access_token]`, primero un Settings JSON (listen `nova-3` + think Google Gemini + speak Aura-2, salida PCM16 24 kHz). Con token del servidor usa el Google LLM gestionado por Deepgram; en dev, si hay `GEMINI_API_KEY`, se inyecta como BYO (`x-goog-api-key`).
 - El manifest pide `audioCapture` y expone `voice-worklet.js` como web-accessible resource.
 
 ## FASE 4 — Side panel híbrido y crecimiento

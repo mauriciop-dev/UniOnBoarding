@@ -3,9 +3,12 @@
 // Sesion de voz bidireccional (hablar y escuchar) con dos proveedores:
 //   L1 gemini_live    : Gemini Live API directo (WebSocket BidiGenerateContent,
 //                       ~key= en la URL, mensajes JSON setup/realtimeInput/serverContent).
-//   A  deepgram_agent : Deepgram Agent API (WebSocket wss://agent.deepgram.com/agent,
+//   A  deepgram_agent : Deepgram Agent API (WebSocket wss://agent.deepgram.com/v1/agent/converse,
 //                       auth por Sec-WebSocket-Protocol ['token', KEY], Settings JSON
 //                       primero; combina STT + LLM + TTS en una sola sesion).
+//                       El "think" usa Google Gemini: si se pasa `geminiKey`, Deepgram
+//                       llama a Google con TU key (BYO, `think.endpoint.headers["x-goog-api-key"]`);
+//                       sin key usa el LLM de Google gestionado por Deepgram (facturado por Deepgram).
 //
 // El audio del microfono se captura en un AudioWorklet (PCM16 16 kHz) y el audio de
 // respuesta se reproduce por otro worklet (colas PCM16 -> contexto de audio).
@@ -18,8 +21,10 @@ export const REALTIME_PROVIDERS = Object.freeze({
 export const GEMINI_DEFAULT_MODEL = 'gemini-3.1-flash-live-preview';
 export const GEMINI_DEFAULT_VOICE = 'Kore';
 const GEMINI_WSS_BASE = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
-export const DEEPGRAM_AGENT_URL = 'wss://agent.deepgram.com/agent';
+const GEMINI_WSS_CONSTRAINED = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained';
+export const DEEPGRAM_AGENT_URL = 'wss://agent.deepgram.com/v1/agent/converse';
 export const DEEPGRAM_AGENT_OUTPUT_RATE = 24000;
+const DEEPGRAM_GOOGLE_LLM = 'https://generativelanguage.googleapis.com/v1beta/models/{{model}}:streamGenerateContent?alt=sse';
 
 function bytesToB64(bytes) {
   const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
@@ -48,9 +53,10 @@ function getWsImpl(wsImpl) {
 // ---------------------------------------------------------------------------
 
 export class GeminiLiveProvider {
-  constructor({ apiKey, model = GEMINI_DEFAULT_MODEL, voice = GEMINI_DEFAULT_VOICE, language = 'es', prompt = '', wsUrl = null, wsImpl = null,
+  constructor({ apiKey = '', accessToken = '', model = GEMINI_DEFAULT_MODEL, voice = GEMINI_DEFAULT_VOICE, language = 'es', prompt = '', wsUrl = null, wsImpl = null,
     onUserText = null, onAssistantText = null, onTurnComplete = null, onStatus = null, onAudio = null, onError = null, onClose = null }) {
     this.apiKey = apiKey;
+    this.accessToken = accessToken;
     this.model = model;
     this.voice = voice;
     this.language = language;
@@ -70,7 +76,11 @@ export class GeminiLiveProvider {
   connect() {
     const WS = getWsImpl(this.wsImpl);
     if (!WS) { this.onError?.(new Error('WebSocket no disponible')); return; }
-    const url = this.wsUrl || `${GEMINI_WSS_BASE}?key=${encodeURIComponent(this.apiKey)}`;
+    // Token efimero (produccion) -> endpoint Constrained con access_token;
+    // API key directa (desarrollo) -> ?key=.
+    const url = this.wsUrl || (this.accessToken
+      ? `${GEMINI_WSS_CONSTRAINED}?access_token=${encodeURIComponent(this.accessToken)}`
+      : `${GEMINI_WSS_BASE}?key=${encodeURIComponent(this.apiKey)}`);
     const ws = new WS(url);
     this.ws = ws;
     ws.onopen = () => {
@@ -136,7 +146,34 @@ export class GeminiLiveProvider {
 // Deepgram Agent API
 // ---------------------------------------------------------------------------
 
-export function defaultAgentSettings({ language = 'es', prompt = '', voice = 'aura-2-selena-es', thinkModel = 'gemini-3.1-flash-lite' } = {}) {
+function isPlainObj(v) {
+  return !!v && typeof v === 'object' && !Array.isArray(v);
+}
+
+function deepMerge(base, override) {
+  const out = Array.isArray(base) ? [...base] : { ...base };
+  for (const k of Object.keys(override || {})) {
+    const v = override[k];
+    if (isPlainObj(v) && isPlainObj(base?.[k])) out[k] = deepMerge(base[k], v);
+    else out[k] = v;
+  }
+  return out;
+}
+
+export function defaultAgentSettings({ language = 'es', prompt = '', voice = 'aura-2-selena-es', thinkModel = 'gemini-3.1-flash-lite', geminiKey = '' } = {}) {
+  const think = {
+    provider: { type: 'google', version: 'ai-studio-v1beta', model: thinkModel, temperature: 0.5 },
+    prompt: prompt || 'Eres el asistente de voz de ProOnboarding. Responde breve y claro, en voz.'
+  };
+  if (geminiKey) {
+    // BYO: Deepgram llama a Google con TU key. Con endpoint propio el campo provider.model
+    // NO se usa; el modelo va en la URL del endpoint.
+    think.provider = { type: 'google', version: 'ai-studio-v1beta', temperature: 0.5 };
+    think.endpoint = {
+      url: DEEPGRAM_GOOGLE_LLM.replace('{{model}}', thinkModel),
+      headers: { 'x-goog-api-key': geminiKey }
+    };
+  }
   return {
     type: 'Settings',
     audio: {
@@ -144,19 +181,22 @@ export function defaultAgentSettings({ language = 'es', prompt = '', voice = 'au
       output: { encoding: 'linear16', sample_rate: DEEPGRAM_AGENT_OUTPUT_RATE, container: 'none' }
     },
     agent: {
-      speak: { provider: { type: 'deepgram', voice } },
-      listen: { provider: { type: 'deepgram', version: 'v2', model: 'flux-general-multi' } },
-      think: { provider: { type: 'google', model: thinkModel, prompt: prompt || 'Eres el asistente de voz de ProOnboarding. Responde breve y claro, en voz.' } },
+      language,
+      speak: { provider: { type: 'deepgram', model: voice } },
+      listen: { provider: { type: 'deepgram', model: 'nova-3' } },
+      think,
       greeting: 'Hola, soy tu guia de ProOnboarding. En que te ayudo?'
     }
   };
 }
 
 export class DeepgramAgentProvider {
-  constructor({ apiKey, settings = null, url = DEEPGRAM_AGENT_URL, thinkModel = 'gemini-3.1-flash-lite', language = 'es', prompt = '', wsImpl = null,
+  constructor({ apiKey = '', accessToken = '', settings = null, url = DEEPGRAM_AGENT_URL, thinkModel = 'gemini-3.1-flash-lite', language = 'es', prompt = '', geminiKey = '', wsImpl = null,
     onUserText = null, onAssistantText = null, onTurnComplete = null, onInterrupt = null, onStatus = null, onAudio = null, onError = null, onClose = null }) {
     this.apiKey = apiKey;
-    this.settings = settings || defaultAgentSettings({ language, prompt, thinkModel });
+    this.accessToken = accessToken;
+    const base = defaultAgentSettings({ language, prompt, thinkModel, geminiKey });
+    this.settings = settings ? deepMerge(base, settings) : base;
     this.url = url;
     this.wsImpl = wsImpl;
     this.onUserText = onUserText;
@@ -175,7 +215,8 @@ export class DeepgramAgentProvider {
     const WS = getWsImpl(this.wsImpl);
     if (!WS) { this.onError?.(new Error('WebSocket no disponible')); return; }
     // En navegador solo se permite Sec-WebSocket-Protocol: token + key.
-    const ws = new WS(this.url, ['token', this.apiKey]);
+    // Con token efimero del backend se usa igual (el token va por el protocol).
+    const ws = new WS(this.url, ['token', this.accessToken || this.apiKey]);
     ws.binaryType = 'arraybuffer';
     this.ws = ws;
     ws.onopen = () => {
@@ -243,8 +284,8 @@ export class DeepgramAgentProvider {
 // ---------------------------------------------------------------------------
 
 export class RealtimeVoiceSession {
-  constructor({ provider = REALTIME_PROVIDERS.GEMINI_LIVE, apiKey, geminiModel = GEMINI_DEFAULT_MODEL, geminiVoice = GEMINI_DEFAULT_VOICE,
-    language = 'es', prompt = '', agentSettings = null, agentThinkModel = 'gemini-3.1-flash-lite',
+  constructor({ provider = REALTIME_PROVIDERS.GEMINI_LIVE, apiKey = '', voiceToken = null, geminiModel = GEMINI_DEFAULT_MODEL, geminiVoice = GEMINI_DEFAULT_VOICE,
+    language = 'es', prompt = '', agentSettings = null, agentThinkModel = 'gemini-3.1-flash-lite', geminiKey = '',
     onUserText = null, onAssistantText = null, onTurnComplete = null, onStatus = null, onError = null } = {}) {
     this.providerName = provider;
     this._running = false;
@@ -266,18 +307,26 @@ export class RealtimeVoiceSession {
       onClose: () => this._onProviderClose()
     };
 
+    const token = (voiceToken && voiceToken.provider === provider) ? voiceToken : null;
+
     if (provider === REALTIME_PROVIDERS.DEEPGRAM_AGENT) {
       this._provider = new DeepgramAgentProvider({
         ...common,
-        settings: agentSettings || defaultAgentSettings({ language, prompt, thinkModel: agentThinkModel }),
+        accessToken: token ? token.token : '',
+        apiKey: token ? '' : apiKey,
+        settings: agentSettings,
         language,
         prompt,
+        geminiKey,
+        thinkModel: agentThinkModel,
         onInterrupt: () => this._clearAudio()
       });
     } else {
       this._provider = new GeminiLiveProvider({
         ...common,
-        model: geminiModel,
+        accessToken: token ? token.token : '',
+        apiKey: token ? '' : apiKey,
+        model: (token && token.model) || geminiModel,
         voice: geminiVoice,
         language,
         prompt

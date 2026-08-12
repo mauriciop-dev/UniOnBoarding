@@ -456,11 +456,37 @@ async function exitTour() {
   maybeShowFeedback();
 }
 
-function deriveChatEndpoint(apiUrl) {
-  const base = String(apiUrl || '')
+function deriveApiBase(apiUrl) {
+  return String(apiUrl || '')
     .replace(/\/api\/analyze-page\/?$/i, '')
     .replace(/\/+$/, '');
+}
+
+function deriveChatEndpoint(apiUrl) {
+  const base = deriveApiBase(apiUrl);
   return base ? `${base}/api/chat` : null;
+}
+
+async function fetchVoiceToken(provider) {
+  const base = deriveApiBase(state.apiUrl);
+  if (!base) return null;
+  try {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), 10000);
+    const res = await fetch(`${base}/api/voice-token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({ provider })
+    });
+    clearTimeout(id);
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => null);
+    if (!data || !data.token) return null;
+    return { provider, token: data.token, model: data.model || null };
+  } catch {
+    return null;
+  }
 }
 
 function addChatBubble(role, content) {
@@ -653,17 +679,27 @@ async function startVoice() {
   showView('chat');
   const provider = $('voice-provider').value;
   state.voiceProvider = provider;
-  const apiKey = provider === REALTIME_PROVIDERS.DEEPGRAM_AGENT ? state.deepgramKey : state.geminiKey;
-  if (!apiKey) {
-    setVoiceStatus('Falta la API key: configúrala en Ajustes', 'error');
-    return;
+
+  // Produccion: token efimero del backend (sin keys del usuario). Fallback:
+  // clave directa solo en desarrollo.
+  let voiceToken = await fetchVoiceToken(provider);
+  let apiKey = '';
+  if (!voiceToken) {
+    apiKey = provider === REALTIME_PROVIDERS.DEEPGRAM_AGENT ? state.deepgramKey : state.geminiKey;
+    if (!apiKey) {
+      setVoiceStatus('Voz no disponible: tu API no emite token y no hay key local', 'error');
+      return;
+    }
   }
+
   const prompt = buildVoicePrompt();
   const agentSettings = provider === REALTIME_PROVIDERS.DEEPGRAM_AGENT ? safeParseJson(state.agentSettings) : null;
 
   const session = new RealtimeVoiceSession({
     provider,
     apiKey,
+    voiceToken,
+    geminiKey: state.geminiKey,
     geminiModel: state.geminiModel || GEMINI_DEFAULT_MODEL,
     language: state.lang,
     prompt,
