@@ -1,5 +1,18 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.10 — Modo Voz en tiempo real (Gemini Live + Deepgram Agent)
+
+- **Nueva capa L5** en Modo Voz: conversación bidireccional por voz con dos proveedores:
+  - `gemini_live`: WebSocket directo `BidiGenerateContent` (`?key=`), mensajes JSON `setup` → `realtimeInput` (PCM16 16 kHz en base64) → `serverContent` (transcripciones + `inlineData` de 24 kHz). Usa la `GEMINI_API_KEY`.
+  - `deepgram_agent`: `wss://agent.deepgram.com/agent` con auth por `Sec-WebSocket-Protocol ['token', key]`; primero envía el Settings JSON (STT Deepgram + think Google + speak Aura-2). Salida PCM16 24 kHz.
+- **Audio real:** micrófono capturado por AudioWorklet `proob-mic-capture` (PCM16 16 kHz) y respuesta reproducida por `proob-sink` (cola PCM16 → contexto de audio). Ambos re-muestrean según sea necesario.
+- **UI en el panel:** barra de voz en el chat (botón Hablar/Detener, selector de proveedor, estado en vivo), y sección "Modo voz (realtime)" en Configuración (Gemini key + modelo, Deepgram key, Settings JSON opcional). Las keys se guardan en `chrome.storage.local`.
+- **Transcript en el chat:** las frases del usuario y la respuesta del asistente se van volcando como burbujas del chat; el contexto de la página (plataforma + pasos) se inyecta en el prompt del agente.
+- Manifest `0.1.10`, permiso `audioCapture` y `voice-worklet.js` como web-accessible resource.
+- Validado con harness (WebSocket mock): setup de ambos proveedores, transcripciones, audio y cierre (35/35 PASS).
+
+---
+
 ## 0.1.9 — Deepgram L2 activo en producción
 
 - La key provista daba **401** porque `lib/tts-engines.js` usaba `Authorization: Bearer`; Deepgram REST exige **`Authorization: Token <key>`** (verificado contra su API). Corregido.

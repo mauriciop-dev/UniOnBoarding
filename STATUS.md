@@ -2,7 +2,7 @@
 
 > **Convención**: cuando el usuario escriba **"retomar"**, leer este archivo completo antes de responder. Contiene el estado del proyecto, problemas conocidos y próximos pasos.
 
-Última actualización: 2026-08-11 (v2.0 — Fases 0–4 parciales).
+Última actualización: 2026-08-11 (v2.0 — Fases 0–4 + FASE 5 Modo Voz).
 
 ---
 
@@ -41,6 +41,8 @@ proonboarding-api/
 │   ├── sidepanel.html / .css / .js  ← UI: resumen, tour, chat, avatar
 │   ├── ai-engine.js        ← cliente del API de análisis
 │   ├── tts-provider.js     ← motor de voz por capas (L1 gemini_live / L2 cloud / L3 local)
+│   ├── realtime-voice.js   ← Modo Voz: Gemini Live + Deepgram Agent (WebSocket)
+│   ├── voice-worklet.js    ← AudioWorklets: captura del mic (PCM16) y sink de reproducción
 │   ├── content.js / .css   ← limpieza DOM + overlay de etiquetas + flujo condicional
 │   ├── icons/icon{16,48,128}.png
 │   ├── scripts/generate-icons.mjs
@@ -85,6 +87,14 @@ proonboarding-api/
 - **Capa Voicebox** configurable en `tts-provider.js` (L3): **contrato real verificado** en `mauriciop-dev/voicebox` → `GET /profiles` (primera voz clonada) + `POST /generate/stream` con `{profile_id, text, language}` → WAV stream por chunk (header `X-Voicebox-Client-Id`). URL base configurable en Configuración (`http://127.0.0.1:17493`). Degrada a Web Speech si falla.
 - **L2 Deepgram (ACTIVO en prod)**: `lib/tts-engines.js` sintetiza con modelos **Aura-2** verificados vía catálogo real (`/v1/models`), auth `Authorization: Token <key>` (no Bearer), modelos por canonical_name (`aura-2-selena-es`, `aura-2-thalia-en`, etc.; pt cae a es). Verificado: `POST /api/tts` en prod → 200 `audio/mpeg` (26 KB). Key `DEEPGRAM_API_KEY` añadida a Vercel env (production).
 
+✅ **FASE 5 — Modo Voz en tiempo real (implementado, código + harness)**:
+- `realtime-voice.js` (L1 Gemini Live directo + Deepgram Agent API) y `voice-worklet.js` (captura PCM16 16 kHz + sink remuestreado). 
+- **Gemini Live**: WebSocket `BidiGenerateContent` con `?key=` (usa la `GEMINI_API_KEY` ya configurada), mensajes JSON `setup` → `realtimeInput` → `serverContent` (transcripciones + audio 24 kHz).
+- **Deepgram Agent**: `wss://agent.deepgram.com/agent`, auth `Sec-WebSocket-Protocol ['token', key]` + Settings JSON (STT Deepgram + think Google + speak Aura-2).
+- UI integrada en el panel: barra de voz en el chat (Hablar/Detener, selector de proveedor, estado) y campos en Configuración (Gemini key/modelo, Deepgram key, Settings JSON). Transcript vuelca al chat con contexto de la página.
+- Manifest `0.1.10` (`audioCapture` + `voice-worklet.js` web-accessible).
+- Validado con harness WebSocket mock (35/35 PASS). **Pendiente prueba en vivo en Chrome** (mic + audio de respuesta).
+
 ---
 
 ## 4. Estado de los providers (verificado en prod)
@@ -96,7 +106,7 @@ proonboarding-api/
 | DeepSeek  | `deepseek-chat`           | ✅ reachable (fallback 3)                             |
 | Bedrock   | `AWS_BEDROCK_MODEL_ID`    | ✅ reachable (4º fallback, NOVA con clave ABSK solo texto) |
 
-> Nota: Bedrock Nova solo sirve texto vía Converse (clave ABSK). Para **voz** (Nova Sonic) se requiere credencial IAM SigV4 o una `DEEPGRAM_API_KEY`; hasta entonces la voz queda en capa L3 local.
+> Nota: Bedrock Nova solo sirve texto vía Converse (clave ABSK). Para **voz** (Nova Sonic) se requiere credencial IAM SigV4; ya cubierto alternativamente por Deepgram L2 y el Modo Voz (Gemini Live / Deepgram Agent).
 
 ---
 
@@ -111,10 +121,11 @@ proonboarding-api/
 ### FASE 4 (siguiente, según `AjustesAgosto.txt`)
 - [x] **Feedback / growth loop** (estrellas + comentario + enlace a store) con persistencia en InsForge.
 - [x] **Sugerencias rápidas** en el chat (chips contextuales).
-- [x] Capa **Voicebox** configurable en el motor de voz (contrato genérico `POST {text, lang}` → audio).
-- [ ] Conectar con el repo real `mauriciop-dev/voicebox` (privado/inaccesible vía GitHub público) y ajustar su contrato exacto si difiere.
-- [ ] **Side Panel v2**: rediseño visual completo que combine chat + tarjetas contextuales.
-- [ ] Activar capa L1 **Gemini Live** (WebSocket, requiere credencial/IAM).
+- [x] **Side Panel v2**: rediseño visual completo que combine chat + tarjetas contextuales.
+- [x] **Capa Voicebox** configurable con el **contrato real** (`GET /profiles` + `POST /generate/stream`). Repo `mauriciop-dev/voicebox` accesible y alineado.
+- [x] **L1 Gemini Live** (FASE 5): WebSocket directo con `GEMINI_API_KEY` (sin IAM). + **Deepgram Agent** como segundo proveedor.
+- [ ] Probar el Modo Voz en vivo en Chrome (mic + reproducción) y ajustar worklets si es necesario.
+- [x] **L2 Deepgram (producción)**: modelos Aura-2 reales, auth `Token`, verificado en prod.
 
 ### Pendientes técnicos / producto
 - [ ] Fallback de selector por texto visible cuando `querySelector` falle.
@@ -132,12 +143,12 @@ Definidas en Vercel (Settings → Environment Variables) y en `.env.local` (NO s
 | Variable               | Estado        | Notas                                        |
 |------------------------|---------------|----------------------------------------------|
 | `GROQ_API_KEY`         | ✅ configurada | `gsk_...`                                     |
-| `GEMINI_API_KEY`       | ✅ configurada | `AIza...`                                     |
+| `GEMINI_API_KEY`       | ✅ configurada | `AIza...`; también usada por Gemini Live (Modo Voz) |
 | `DEEPSEEK_API_KEY`     | ✅ configurada | `sk-...`                                      |
 | `AWS_BEDROCK_API_KEY`  | ✅ configurada | Sensitive; solo texto (Converse)              |
 | `AWS_BEDROCK_REGION`   | ✅ configurada |                                              |
 | `AWS_BEDROCK_MODEL_ID` | ✅ configurada |                                              |
-| `DEEPGRAM_API_KEY`     | ⬜ pendiente   | activa la capa L2 de voz                      |
+| `DEEPGRAM_API_KEY`     | ✅ configurada | L2 `/api/tts` y Modo Voz Agent                 |
 | `INSFORGE_URL`         | ✅ configurada |                                              |
 | `INSFORGE_API_KEY`     | ✅ configurada | `ik_...`                                      |
 | `INSFORGE_ANON_KEY`    | ✅ configurada | `eyJ...` (opcional)                           |
@@ -158,7 +169,7 @@ Definidas en Vercel (Settings → Environment Variables) y en `.env.local` (NO s
 ## 9. Problemas conocidos
 
 - **`.env.local`**: `vercel link --yes` puede regenerarlo añadiendo entradas `VERCEL_*`. Revisar duplicados antes de desplegar. Nunca commitear.
-- **Voz cloud inactiva**: falta `DEEPGRAM_API_KEY` (o IAM para Nova Sonic). El chip mostrará "Voz local".
+- **Modo Voz**: código y worklets listos, validados solo con mock. Requiere **prueba en vivo en Chrome** (permiso de micrófono). **Deepgram Agent** necesita el proyecto habilitado y el modelo "think" (Google) vinculado en console.deepgram.com.
 - **`.gitignore`** incluye `nul` (archivo huérfano Windows) si reaparece.
 
 ---

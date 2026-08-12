@@ -139,6 +139,17 @@
           <summary>Contexto de esta pagina</summary>
           <div id="chat-context-body" class="chat-context-body"></div>
         </details>
+        <div class="voice-bar">
+          <button id="voice-btn" class="voice-btn" title="Modo voz: mantener para hablar">
+            <span id="voice-btn-ico">🎙️</span>
+            <span id="voice-btn-label">Hablar</span>
+          </button>
+          <select id="voice-provider" class="voice-provider" title="Proveedor del modo voz">
+            <option value="gemini_live">Gemini Live</option>
+            <option value="deepgram_agent">Deepgram Agent</option>
+          </select>
+          <span id="voice-status" class="voice-status">Voz desactivada</span>
+        </div>
         <div id="chat-suggestions" class="chat-suggestions"></div>
         <div id="chat-messages" class="chat-messages"></div>
         <div class="chat-composer">
@@ -190,6 +201,25 @@
           <input id="voicebox-url-input" type="url" placeholder="http://127.0.0.1:17493" />
         </label>
         <p class="hint settings-hint">URL base de Voicebox (el backend FastAPI local). Usa la primera voz clonada de tus perfiles. Contrato real: GET /profiles + POST /generate/stream → WAV. Se usa sin conexión o como fallback antes de las voces del sistema.</p>
+        <hr class="settings-sep" />
+        <h4 class="settings-subtitle">Modo voz (realtime)</h4>
+        <label>
+          Gemini API key (Live)
+          <input id="gemini-key-input" type="password" placeholder="AIza..." autocomplete="off" />
+        </label>
+        <label>
+          Modelo Gemini Live
+          <input id="gemini-model-input" type="text" placeholder="gemini-3.1-flash-live-preview" />
+        </label>
+        <label>
+          Deepgram API key (Agent)
+          <input id="deepgram-key-input" type="password" placeholder="Token..." autocomplete="off" />
+        </label>
+        <label>
+          Agent Settings JSON (opcional)
+          <textarea id="agent-settings-input" rows="4" placeholder='{"type":"Settings","audio":{...}}'></textarea>
+        </label>
+        <p class="hint settings-hint">Las keys se guardan localmente en chrome.storage.local. La voz y el modelo del agente se configuran en el JSON de Settings (por defecto: voz Aura). Deepgram Agent requiere el proyecto habilitado y, si usas Google como "think", vincular el modelo en console.deepgram.com.</p>
         <div class="modal-actions">
           <button id="settings-cancel" class="ghost">Cancelar</button>
           <button id="settings-save" class="primary">Guardar</button>

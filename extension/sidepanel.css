@@ -537,3 +537,54 @@ button.link {
   align-items: flex-start;
 }
 .cc-start { align-self: flex-start; }
+
+
+/* ===== Modo Voz (realtime) ===== */
+.voice-bar { display: flex; align-items: center; gap: 8px; }
+.voice-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.voice-btn:hover { border-color: var(--text-dim); }
+.voice-btn.active {
+  background: var(--error);
+  border-color: var(--error);
+  color: #fff;
+}
+.voice-provider {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 4px;
+  font-size: 12px;
+}
+.voice-status { font-size: 11px; color: var(--text-dim); flex: 1; text-align: right; }
+.voice-status.live { color: var(--success); font-weight: 600; }
+.voice-status.error { color: var(--error); }
+
+.settings-sep { border: 0; border-top: 1px solid var(--border); margin: 14px 0; }
+.settings-subtitle { margin: 4px 0 10px; font-size: 13px; color: var(--text); }
+textarea {
+  width: 100%;
+  max-width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  font: inherit;
+  font-size: 12px;
+  resize: vertical;
+}
+textarea:focus { outline: none; border-color: var(--primary); }

@@ -2,6 +2,7 @@
 
 import { analyzePageWithFallback } from './ai-engine.js';
 import { TTSProvider, TTS_LAYERS } from './tts-provider.js';
+import { RealtimeVoiceSession, REALTIME_PROVIDERS, GEMINI_DEFAULT_MODEL } from './realtime-voice.js';
 
 const DEFAULT_API_URL = 'https://uni-on-boarding-idcs.vercel.app/api/analyze-page';
 const STORAGE_KEYS = {
@@ -9,7 +10,12 @@ const STORAGE_KEYS = {
   lang: 'proob.lang',
   avatar: 'proob.avatar',
   voiceboxUrl: 'proob.voiceboxUrl',
-  feedback: 'proob.feedback'
+  feedback: 'proob.feedback',
+  voiceProvider: 'proob.voiceProvider',
+  geminiKey: 'proob.geminiKey',
+  geminiModel: 'proob.geminiModel',
+  deepgramKey: 'proob.deepgramKey',
+  agentSettings: 'proob.agentSettings'
 };
 
 const LOCAL_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -69,7 +75,13 @@ const state = {
   chatHistory: [],
   feedbackRating: 0,
   speech: null,
-  isSpeaking: false
+  isSpeaking: false,
+  voiceProvider: REALTIME_PROVIDERS.GEMINI_LIVE,
+  voiceSession: null,
+  geminiKey: '',
+  geminiModel: GEMINI_DEFAULT_MODEL,
+  deepgramKey: '',
+  agentSettings: ''
 };
 
 let lastMainView = 'idle';
@@ -77,7 +89,10 @@ let lastMainView = 'idle';
 function showView(name) {
   Object.values(views).forEach(v => v.classList.remove('active'));
   views[name].classList.add('active');
-  if (name !== 'chat') lastMainView = name;
+  if (name !== 'chat') {
+    lastMainView = name;
+    if (state.voiceSession) stopVoice();
+  }
   const chatTab = $('tab-chat');
   const inicioTab = $('tab-inicio');
   if (chatTab) chatTab.classList.toggle('active', name === 'chat');
@@ -92,14 +107,27 @@ function switchTab(name) {
 function setLoadingText(text) { $('loading-text').textContent = text; }
 
 async function loadSettings() {
-  const stored = await chrome.storage.local.get([STORAGE_KEYS.apiUrl, STORAGE_KEYS.lang, STORAGE_KEYS.avatar, STORAGE_KEYS.voiceboxUrl]);
+  const stored = await chrome.storage.local.get([
+    STORAGE_KEYS.apiUrl, STORAGE_KEYS.lang, STORAGE_KEYS.avatar, STORAGE_KEYS.voiceboxUrl,
+    STORAGE_KEYS.voiceProvider, STORAGE_KEYS.geminiKey, STORAGE_KEYS.geminiModel,
+    STORAGE_KEYS.deepgramKey, STORAGE_KEYS.agentSettings
+  ]);
   state.apiUrl = stored[STORAGE_KEYS.apiUrl] || DEFAULT_API_URL;
   state.lang = stored[STORAGE_KEYS.lang] || 'es';
   state.avatar = stored[STORAGE_KEYS.avatar] || 'bot';
   state.voiceboxUrl = stored[STORAGE_KEYS.voiceboxUrl] || '';
+  state.voiceProvider = stored[STORAGE_KEYS.voiceProvider] || REALTIME_PROVIDERS.GEMINI_LIVE;
+  state.geminiKey = stored[STORAGE_KEYS.geminiKey] || '';
+  state.geminiModel = stored[STORAGE_KEYS.geminiModel] || GEMINI_DEFAULT_MODEL;
+  state.deepgramKey = stored[STORAGE_KEYS.deepgramKey] || '';
+  state.agentSettings = stored[STORAGE_KEYS.agentSettings] || '';
   $('api-url-input').value = state.apiUrl;
   $('lang-input').value = state.lang;
   $('voicebox-url-input').value = state.voiceboxUrl;
+  $('gemini-key-input').value = state.geminiKey;
+  $('gemini-model-input').value = state.geminiModel;
+  $('deepgram-key-input').value = state.deepgramKey;
+  $('agent-settings-input').value = state.agentSettings;
   updateAvatarUI();
 }
 
@@ -107,14 +135,26 @@ async function saveSettings() {
   const apiUrl = $('api-url-input').value.trim() || DEFAULT_API_URL;
   const lang = $('lang-input').value;
   const voiceboxUrl = $('voicebox-url-input').value.trim();
+  const geminiKey = $('gemini-key-input').value.trim();
+  const geminiModel = $('gemini-model-input').value.trim() || GEMINI_DEFAULT_MODEL;
+  const deepgramKey = $('deepgram-key-input').value.trim();
+  const agentSettings = $('agent-settings-input').value.trim();
   await chrome.storage.local.set({
     [STORAGE_KEYS.apiUrl]: apiUrl,
     [STORAGE_KEYS.lang]: lang,
-    [STORAGE_KEYS.voiceboxUrl]: voiceboxUrl
+    [STORAGE_KEYS.voiceboxUrl]: voiceboxUrl,
+    [STORAGE_KEYS.geminiKey]: geminiKey,
+    [STORAGE_KEYS.geminiModel]: geminiModel,
+    [STORAGE_KEYS.deepgramKey]: deepgramKey,
+    [STORAGE_KEYS.agentSettings]: agentSettings
   });
   state.apiUrl = apiUrl;
   state.lang = lang;
   state.voiceboxUrl = voiceboxUrl;
+  state.geminiKey = geminiKey;
+  state.geminiModel = geminiModel;
+  state.deepgramKey = deepgramKey;
+  state.agentSettings = agentSettings;
   configureTts();
   $('settings-modal').hidden = true;
 }
@@ -555,6 +595,120 @@ const STATUS_MESSAGES = {
   cloud_loading: 'Consultando API cloud...',
 };
 
+const VOICE_STATUS_TEXT = {
+  conectando: 'Conectando...',
+  listo: 'Voz activa',
+  escuchando: 'Escuchando...',
+  procesando: 'Procesando...',
+  hablando: 'Respondiendo...',
+  cerrado: 'Sesión cerrada',
+  desconectado: 'Desconectado',
+  'usando herramienta': 'Buscando info...',
+  interrumpido: 'Interrumpido'
+};
+
+function setVoiceStatus(text, cls = '') {
+  const el = $('voice-status');
+  if (!el) return;
+  el.textContent = text;
+  el.className = `voice-status${cls ? ` ${cls}` : ''}`;
+}
+
+function mapVoiceStatus(s) {
+  setVoiceStatus(VOICE_STATUS_TEXT[s] || s, s === 'listo' ? 'live' : '');
+}
+
+function safeParseJson(text) {
+  if (!text || !text.trim()) return null;
+  try { return JSON.parse(text); } catch { return null; }
+}
+
+function buildVoicePrompt() {
+  const pa = state.analysis?.page_analysis || {};
+  const ctx = buildChatContext();
+  const lines = [
+    'Eres el guía de voz de ProOnboarding. Respondes siempre en español de Latinoamérica.',
+    `El usuario navega por: ${pa.detected_platform_name || 'una página web'}.`
+  ];
+  if (ctx) lines.push(`Contexto de la página:\n${ctx}`);
+  lines.push('Reglas: responde de forma breve (una idea), natural para voz, sin listas largas.');
+  return lines.join('\n\n');
+}
+
+let voiceAssistantEl = null;
+
+function appendVoiceAssistant(txt, final) {
+  if (!voiceAssistantEl) {
+    voiceAssistantEl = addChatBubble('assistant', txt);
+  } else {
+    const body = voiceAssistantEl.querySelector('.chat-body');
+    if (body) body.textContent = txt;
+    $('chat-messages').scrollTop = $('chat-messages').scrollHeight;
+  }
+  if (final) voiceAssistantEl = null;
+}
+
+async function startVoice() {
+  stopSpeaking();
+  showView('chat');
+  const provider = $('voice-provider').value;
+  state.voiceProvider = provider;
+  const apiKey = provider === REALTIME_PROVIDERS.DEEPGRAM_AGENT ? state.deepgramKey : state.geminiKey;
+  if (!apiKey) {
+    setVoiceStatus('Falta la API key: configúrala en Ajustes', 'error');
+    return;
+  }
+  const prompt = buildVoicePrompt();
+  const agentSettings = provider === REALTIME_PROVIDERS.DEEPGRAM_AGENT ? safeParseJson(state.agentSettings) : null;
+
+  const session = new RealtimeVoiceSession({
+    provider,
+    apiKey,
+    geminiModel: state.geminiModel || GEMINI_DEFAULT_MODEL,
+    language: state.lang,
+    prompt,
+    agentSettings,
+    onUserText: (txt) => addChatBubble('user', txt),
+    onAssistantText: (txt, final) => appendVoiceAssistant(txt, final),
+    onTurnComplete: () => setVoiceStatus('Voz activa', 'live'),
+    onStatus: (s) => mapVoiceStatus(s),
+    onError: (err) => {
+      setVoiceStatus(`Error: ${err?.message || err}`, 'error');
+      stopVoice();
+    }
+  });
+  state.voiceSession = session;
+
+  const btn = $('voice-btn');
+  btn.classList.add('active');
+  $('voice-btn-label').textContent = 'Detener';
+  setVoiceStatus('Escuchando...', '');
+
+  try {
+    await session.start();
+    setVoiceStatus('Voz activa', 'live');
+  } catch (err) {
+    setVoiceStatus(`Error: ${err.message || err}`, 'error');
+    stopVoice();
+  }
+}
+
+async function stopVoice() {
+  const s = state.voiceSession;
+  state.voiceSession = null;
+  voiceAssistantEl = null;
+  const btn = $('voice-btn');
+  btn.classList.remove('active');
+  $('voice-btn-label').textContent = 'Hablar';
+  setVoiceStatus('Voz desactivada');
+  if (s) { try { await s.stop(); } catch { void s.stop(); } }
+}
+
+async function toggleVoice() {
+  if (state.voiceSession) await stopVoice();
+  else await startVoice();
+}
+
 async function analyzeThisPage() {
   try {
     $('analyze-btn').disabled = true;
@@ -643,6 +797,10 @@ function wire() {
     $('api-url-input').value = state.apiUrl;
     $('lang-input').value = state.lang;
     $('voicebox-url-input').value = state.voiceboxUrl;
+    $('gemini-key-input').value = state.geminiKey;
+    $('gemini-model-input').value = state.geminiModel;
+    $('deepgram-key-input').value = state.deepgramKey;
+    $('agent-settings-input').value = state.agentSettings;
     $('settings-modal').hidden = false;
   });
   $('settings-cancel').addEventListener('click', () => { $('settings-modal').hidden = true; });
@@ -650,6 +808,17 @@ function wire() {
   $('settings-modal').addEventListener('click', (e) => {
     if (e.target === $('settings-modal')) $('settings-modal').hidden = true;
   });
+
+  const voiceBtn = $('voice-btn');
+  if (voiceBtn) voiceBtn.addEventListener('click', toggleVoice);
+  const voiceProvider = $('voice-provider');
+  if (voiceProvider) {
+    voiceProvider.value = state.voiceProvider;
+    voiceProvider.addEventListener('change', (e) => {
+      state.voiceProvider = e.target.value;
+      chrome.storage.local.set({ [STORAGE_KEYS.voiceProvider]: e.target.value });
+    });
+  }
 }
 
 (async function init() {
