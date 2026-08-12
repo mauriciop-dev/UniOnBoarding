@@ -1,5 +1,14 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.17 — Fix del hang "Conectando..." en Modo Voz
+
+- **CAUSA RAIZ encontrada (validada contra Google con tu key)**: el servidor de Gemini Live entrega los mensajes JSON del WebSocket como **Blob/binario** y se hacía `JSON.parse(ev.data)` directo → el parseo fallaba en silencio → `setupComplete` nunca se procesaba → el panel quedaba "Conectando..." para siempre.
+- Los handlers de mensajes de **Gemini Live** y **Deepgram Agent** ahora aceptan string **y** Blob (`messageText`/`await data.text()`), manteniendo el parseo síncrono para strings (no rompe los tests 54/54 y 19/19).
+- **Watchdog de conexión**: si en 20 s no llega `setupComplete`, se corta la sesión y el panel muestra "Sin respuesta del servidor (timeout tras 20s)" en vez de quedarse colgado.
+- Validado en vivo: importando `realtime-voice.js` (código real) contra la API, con la key de dev y el endpoint `?key=`, la sesión pasa por `conectando → listo` correctamente.
+
+---
+
 ## 0.1.16 — Diagnóstico de cierre + audio de respuesta de Gemini
 
 - **Gemini Live no reproducía la respuesta por voz**: la sesión no conectaba `onAudio` del provider al worklet de salida (solo se veía el texto por `outputTranscription`). Ahora el audio PCM del `serverContent` se reproduce por el sink.

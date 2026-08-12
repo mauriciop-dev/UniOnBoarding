@@ -48,6 +48,18 @@ function getWsImpl(wsImpl) {
   return typeof WebSocket !== 'undefined' ? WebSocket : null;
 }
 
+async function messageText(ev) {
+  const d = ev && ev.data;
+  if (typeof d === 'string') return d;
+  if (d == null) return null;
+  if (typeof d.text === 'function') return d.text();
+  try {
+    if (ArrayBuffer.isView(d)) return new TextDecoder().decode(new Uint8Array(d.buffer, d.byteOffset, d.byteLength));
+    if (d instanceof ArrayBuffer) return new TextDecoder().decode(new Uint8Array(d));
+  } catch { return null; }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Gemini Live (BidiGenerateContent)
 // ---------------------------------------------------------------------------
@@ -104,9 +116,9 @@ export class GeminiLiveProvider {
     ws.onclose = (e) => this.onClose?.({ code: e && e.code, reason: (e && e.reason) || '' });
   }
 
-  _onSocketMessage(ev) {
+  _onJsonMessage(text) {
     let msg;
-    try { msg = JSON.parse(ev.data); } catch { return; }
+    try { msg = JSON.parse(text); } catch { return; }
     if (msg.setupComplete) { this.onStatus?.('listo'); return; }
     if (msg.serverContent) {
       const sc = msg.serverContent;
@@ -129,6 +141,13 @@ export class GeminiLiveProvider {
       return;
     }
     if (msg.toolCall) this.onStatus?.('usando herramienta');
+  }
+
+  async _onSocketMessage(ev) {
+    const d = ev && ev.data;
+    if (typeof d === 'string') { this._onJsonMessage(d); return; }
+    const text = await messageText(ev);
+    if (text) this._onJsonMessage(text);
   }
 
   sendAudio(pcm16Bytes) {
@@ -228,43 +247,50 @@ export class DeepgramAgentProvider {
     ws.onclose = (e) => this.onClose?.({ code: e && e.code, reason: (e && e.reason) || '' });
   }
 
-  _onSocketMessage(ev) {
-    if (typeof ev.data === 'string') {
-      let m;
-      try { m = JSON.parse(ev.data); } catch { return; }
-      switch (m.type) {
-        case 'SettingsApplied':
-          this.onStatus?.('listo');
-          break;
-        case 'UserStartedSpeaking':
-          this.onStatus?.('escuchando');
-          this.onInterrupt?.();
-          break;
-        case 'UserStoppedSpeaking':
-          this.onStatus?.('procesando');
-          break;
-        case 'FinalTranscript':
-          if (m.transcript && m.transcript.trim()) this.onUserText?.(m.transcript.trim(), true);
-          break;
-        case 'ConversationTextUpdate':
-          if (m.role === 'agent' && m.content) this.onAssistantText?.(m.content, false);
-          break;
-        case 'AgentStartedSpeaking':
-          this.onStatus?.('hablando');
-          break;
-        case 'AgentAudioDone':
-          this.onTurnComplete?.();
-          break;
-        case 'Close':
-          this.onStatus?.('cerrado');
-          this.close();
-          break;
-        default:
-          break;
-      }
+  _onJsonMessage(text) {
+    let m;
+    try { m = JSON.parse(text); } catch { return; }
+    switch (m.type) {
+      case 'SettingsApplied':
+        this.onStatus?.('listo');
+        break;
+      case 'UserStartedSpeaking':
+        this.onStatus?.('escuchando');
+        this.onInterrupt?.();
+        break;
+      case 'UserStoppedSpeaking':
+        this.onStatus?.('procesando');
+        break;
+      case 'FinalTranscript':
+        if (m.transcript && m.transcript.trim()) this.onUserText?.(m.transcript.trim(), true);
+        break;
+      case 'ConversationTextUpdate':
+        if (m.role === 'agent' && m.content) this.onAssistantText?.(m.content, false);
+        break;
+      case 'AgentStartedSpeaking':
+        this.onStatus?.('hablando');
+        break;
+      case 'AgentAudioDone':
+        this.onTurnComplete?.();
+        break;
+      case 'Close':
+        this.onStatus?.('cerrado');
+        this.close();
+        break;
+      default:
+        break;
+    }
+  }
+
+  async _onSocketMessage(ev) {
+    const d = ev && ev.data;
+    if (typeof d === 'string') { this._onJsonMessage(d); return; }
+    if (d && typeof d.text === 'function') {
+      const text = await d.text();
+      if (text) this._onJsonMessage(text);
       return;
     }
-    const data = ev.data && typeof ev.data.byteLength === 'number' ? ev.data : null;
+    const data = d && typeof d.byteLength === 'number' ? d : null;
     if (data) {
       this.onAudio?.({ pcm16: data, rate: this.outputRate });
     }
@@ -289,6 +315,8 @@ export class RealtimeVoiceSession {
     onUserText = null, onAssistantText = null, onTurnComplete = null, onStatus = null, onError = null } = {}) {
     this.providerName = provider;
     this._running = false;
+    this._ready = false;
+    this._connectWatchdog = null;
     this._audioCtx = null;
     this._micNode = null;
     this._sinkNode = null;
@@ -302,7 +330,13 @@ export class RealtimeVoiceSession {
       onUserText: (t, final) => this._onUserText(t, final),
       onAssistantText: (t, final) => this._onAssistantText(t, final),
       onTurnComplete: (why) => this._onTurnComplete(why),
-      onStatus: (s) => this._cb.onStatus?.(s),
+      onStatus: (s) => {
+        if (s === 'listo') {
+          this._ready = true;
+          if (this._connectWatchdog) { clearTimeout(this._connectWatchdog); this._connectWatchdog = null; }
+        }
+        this._cb.onStatus?.(s);
+      },
       onError: (e) => this._cb.onError?.(e),
       onClose: (info) => this._onProviderClose(info),
       onAudio: (a) => this._play(a)
@@ -340,6 +374,13 @@ export class RealtimeVoiceSession {
     this._running = true;
     await this._setupAudio();
     if (!this._running) return; // stop() ocurrio mientras se preparaba el audio
+    this._ready = false;
+    this._connectWatchdog = setTimeout(() => {
+      if (this._running && !this._ready) {
+        this._cb.onError?.(new Error('Sin respuesta del servidor (timeout tras 20s). Volvé a intentar.'));
+        this.stop();
+      }
+    }, 20000);
     this._provider.connect();
   }
 
@@ -480,6 +521,7 @@ export class RealtimeVoiceSession {
 
   async stop() {
     this._running = false;
+    if (this._connectWatchdog) { clearTimeout(this._connectWatchdog); this._connectWatchdog = null; }
     try { if (this._provider) this._provider.close(); } catch { this._provider = null; }
     try { if (this._stream) this._stream.getTracks().forEach((t) => t.stop()); } catch { this._stream = null; }
     try { if (this._audioCtx) await this._audioCtx.close(); } catch { this._audioCtx = null; }
