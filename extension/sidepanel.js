@@ -726,8 +726,15 @@ async function startVoice() {
     await session.start();
     setVoiceStatus('Voz activa', 'live');
   } catch (err) {
-    setVoiceStatus(`Error: ${err.message || err}`, 'error');
+    const msg = (err && err.message) || String(err);
+    const permIssue = /permiso|permission|NotAllowed|PermissionDismissed|dismissed/i.test(msg);
     stopVoice();
+    if (permIssue) {
+      setVoiceStatus('Necesito permiso del micrófono: se abrió una pestaña para pedirlo. Hacé clic en Permitir y después volvé y presioná Hablar otra vez.', 'error');
+      chrome.tabs.create({ url: chrome.runtime.getURL('request-mic.html') }).catch(() => {});
+    } else {
+      setVoiceStatus(`Error: ${msg}`, 'error');
+    }
   }
 }
 

@@ -1,5 +1,13 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.15 — Micrófono con offscreen document (patrón oficial de Chrome)
+
+- **El sidepanel y el popup no pueden mostrar el prompt de `getUserMedia`** (bug conocido de Chromium: `NotAllowedError: Permission dismissed` sin preguntar). Solución oficial de Chrome: **capturar el micrófono en un `offscreen document` con razón `USER_MEDIA`** y pedir el permiso una vez desde una página visible (`request-mic.html` abierta en pestaña). El PCM16 viaja del offscreen al sidepanel vía `chrome.runtime.sendMessage` (`proob:pcm`) y de ahí al WebSocket.
+- Se agrega la permisión **`offscreen`** al manifest. El service worker crea/cierra el documento (`proob:offscreen`) y la captura responde a `proob:voicestart/stop`.
+- Flujo del primer uso: apretar "Hablar" → si el offscreen no puede pedir el permisoo, se abre `request-mic.html` en una pestaña → el usuario hace clic en "Permitir" → vuelve al panel y presiona "Hablar" de nuevo → listo. En navegadores sin offscreen (p. ej. Firefox), sigue funcionando la captura directa del sidepanel.
+
+---
+
 ## 0.1.14 — Fix de prueba manual en Chrome
 
 - **`audioCapture` fuera del manifest**: es inválido en extensiones (solo Chrome Apps). Chrome lo rechazaba con `'audioCapture' is only allowed for packaged apps`. El micrófono se captura con `navigator.mediaDevices.getUserMedia` desde el sidepanel; Chrome pide permiso en el primer "Hablar".

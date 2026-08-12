@@ -355,7 +355,19 @@ export class RealtimeVoiceSession {
       ? chrome.runtime.getURL('voice-worklet.js')
       : 'voice-worklet.js';
     await ctx.audioWorklet.addModule(workletUrl);
+    this._sinkNode = new AudioWorkletNode(ctx, 'proob-sink');
+    this._sinkNode.connect(ctx.destination);
 
+    if (this._hasOffscreen()) await this._startOffscreenMic();
+    else await this._startInlineMic(ctx);
+  }
+
+  _hasOffscreen() {
+    return typeof chrome !== 'undefined' && !!chrome.offscreen && !!chrome.runtime;
+  }
+
+  // Captura directa en la propia pagina (navegadores sin offscreen o solo dev).
+  async _startInlineMic(ctx) {
     let stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({
@@ -377,8 +389,45 @@ export class RealtimeVoiceSession {
       if (this._provider) this._provider.sendAudio(e.data);
     };
     src.connect(this._micNode);
-    this._sinkNode = new AudioWorkletNode(ctx, 'proob-sink');
-    this._sinkNode.connect(ctx.destination);
+  }
+
+  // Captura en documento offscreen (patron oficial de Chrome: el sidepanel y el
+  // popup no pueden mostrar el prompt de getUserMedia). El permiso se pide una
+  // vez desde request-mic.html; el offscreen recibe la orden via messaging.
+  async _startOffscreenMic() {
+    await this._ensureOffscreenDoc();
+    this._micListener = (msg) => {
+      if (msg && msg.type === 'proob:pcm' && this._provider) this._provider.sendAudio(msg.data);
+    };
+    chrome.runtime.onMessage.addListener(this._micListener);
+    let res;
+    try {
+      res = await chrome.runtime.sendMessage({ type: 'proob:voicestart' });
+    } catch (err) {
+      throw new Error(`No se pudo iniciar la captura (offscreen): ${(err && err.message) || err}`);
+    }
+    if (!res || !res.ok) {
+      throw new Error((res && res.error) || 'No se pudo iniciar la captura del micrófono.');
+    }
+  }
+
+  async _ensureOffscreenDoc() {
+    let res;
+    try {
+      res = await chrome.runtime.sendMessage({ type: 'proob:offscreen', action: 'create' });
+    } catch (err) {
+      throw new Error(`Offscreen no disponible: ${(err && err.message) || err}`);
+    }
+    if (!res || !res.ok) throw new Error((res && res.error) || 'No se pudo crear el documento offscreen.');
+  }
+
+  async _stopOffscreenMic() {
+    if (this._micListener) {
+      try { chrome.runtime.onMessage.removeListener(this._micListener); } catch { }
+      this._micListener = null;
+    }
+    try { await chrome.runtime.sendMessage({ type: 'proob:voicestop' }); } catch { }
+    try { await chrome.runtime.sendMessage({ type: 'proob:offscreen', action: 'close' }); } catch { }
   }
 
   _play({ pcm16, rate }) {
@@ -430,5 +479,6 @@ export class RealtimeVoiceSession {
     try { if (this._audioCtx) await this._audioCtx.close(); } catch { this._audioCtx = null; }
     this._micNode = null;
     this._sinkNode = null;
+    await this._stopOffscreenMic();
   }
 }

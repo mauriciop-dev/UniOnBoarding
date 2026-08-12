@@ -27,4 +27,31 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     .catch(err => sendResponse({ ok: false, error: err.message }));
     return true;
   }
+
+  // Modo Voz: gestiona el documento offscreen que captura el microfono.
+  // El offscreen no puede mostrar el prompt de permiso; se concede antes desde
+  // request-mic.html. Aqui solo creamos/cerramos el documento (USER_MEDIA).
+  if (msg?.type === 'proob:offscreen') {
+    (async () => {
+      if (msg.action === 'close') {
+        try { await chrome.offscreen.closeDocument(); } catch { }
+        return sendResponse({ ok: true });
+      }
+      try {
+        const contexts = await chrome.runtime.getContexts?.({ contextTypes: ['OFFSCREEN_DOCUMENT'] });
+        const exists = !!(contexts && contexts.length);
+        if (!exists) {
+          await chrome.offscreen.createDocument({
+            url: 'offscreen.html',
+            reasons: ['USER_MEDIA'],
+            justification: 'Capturar el microfono para el Modo Voz.'
+          });
+        }
+        return sendResponse({ ok: true });
+      } catch (err) {
+        return sendResponse({ ok: false, error: (err && err.message) || String(err) });
+      }
+    })();
+    return true;
+  }
 });
