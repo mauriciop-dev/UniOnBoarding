@@ -87,14 +87,14 @@ export class GeminiLiveProvider {
       ws.send(JSON.stringify({
         setup: {
           model: `models/${this.model}`,
-          responseModalities: ['AUDIO'],
-          systemInstruction: { parts: [{ text: this.prompt || 'Eres un asistente de voz util y conciso.' }] },
           generationConfig: {
+            responseModalities: ['AUDIO'],
             speechConfig: {
               voiceConfig: { prebuiltVoiceConfig: { voiceName: this.voice } },
               languageCode: this.language
             }
-          }
+          },
+          systemInstruction: { parts: [{ text: this.prompt || 'Eres un asistente de voz util y conciso.' }] }
         }
       }));
       this.onStatus?.('conectando');

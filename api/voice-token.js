@@ -32,17 +32,12 @@ async function mintGeminiToken({ geminiKey, model }) {
   const now = new Date();
   const expire = new Date(now.getTime() + 30 * 60 * 1000).toISOString();
   const sessionExpire = new Date(now.getTime() + 60 * 1000).toISOString();
+  // El endpoint REST no acepta liveConnectConstraints (el SDK lo mapea aparte):
+  // solo uses + expiraciones. El token se limita al Live API (v1beta/v1alpha).
+  void model;
   const data = await postJson(GEMINI_TOKEN_URL, {
     headers: { 'x-goog-api-key': geminiKey },
-    body: {
-      uses: 1,
-      expireTime: expire,
-      newSessionExpireTime: sessionExpire,
-      liveConnectConstraints: {
-        model: `models/${model}`,
-        config: { responseModalities: ['AUDIO'] }
-      }
-    }
+    body: { uses: 1, expireTime: expire, newSessionExpireTime: sessionExpire }
   });
   if (!data?.name) {
     const err = new Error('Google no devolvio un token efimero.');

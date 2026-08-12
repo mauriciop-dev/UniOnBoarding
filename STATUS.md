@@ -93,9 +93,9 @@ proonboarding-api/
 - **Gemini Live**: WebSocket `BidiGenerateContent` con `?key=` (usa la `GEMINI_API_KEY` ya configurada), mensajes JSON `setup` → `realtimeInput` → `serverContent` (transcripciones + audio 24 kHz).
 - **Deepgram Agent**: `wss://agent.deepgram.com/v1/agent/converse`, auth `Sec-WebSocket-Protocol ['token', key]` + Settings JSON (listen `nova-3` + think Google Gemini + speak Aura-2). La `GEMINI_API_KEY` del usuario se inyecta en el **payload del think** (`think.endpoint.headers['x-goog-api-key']`, BYO) — **sin vinculación en la consola de Deepgram**; si está vacía, usa el Google LLM gestionado por Deepgram.
 - UI integrada en el panel: barra de voz en el chat (Hablar/Detener, selector de proveedor, estado) y campos en Configuración (Gemini key/modelo, Deepgram key, Settings JSON). Transcript vuelca al chat con contexto de la página.
-- Manifest `0.1.12` (`audioCapture` + `voice-worklet.js` web-accessible).
-- **Tokens efímeros (sin keys para el usuario)**: `POST /api/voice-token` mintea tokens de corta vida con tus keys de servidor (Gemini `auth_tokens` constrained / Deepgram `auth/grant`). La extensión pide el token en el arranque; **el usuario no configura nada**. Claves locales opcionales (solo dev). **Principal: Gemini Live** (la más económica, ~$0.012–0.023/min).
-- Validado con harness WebSocket mock + endpoint (`/api/voice-token`): 72/72 PASS. **Pendiente: deploy de la API** (para que el endpoint exista en prod) y prueba en vivo en Chrome.
+- Manifest `0.1.13` (`audioCapture` + `voice-worklet.js` web-accessible).
+- **Tokens efímeros (sin keys para el usuario)**: `POST /api/voice-token` mintea tokens de corta vida con tus keys de servidor (Gemini `auth_tokens` / Deepgram `auth/grant`). La extensión pide el token en el arranque; **el usuario no configura nada**. Claves locales opcionales (solo dev). **Principal: Gemini Live** (la más económica, ~$0.012–0.023/min).
+- **Validado EN VIVO contra Google** (no solo mock): mint v1beta (sin constraints, que REST rechaza) → `BidiGenerateContentConstrained?access_token=…` → `setupComplete` con `generationConfig.responseModalities:["AUDIO"]` (schema corregido: antes se mandaba en `setup` y el servidor lo rechazaba). Harness 73/73 PASS.
 
 ---
 

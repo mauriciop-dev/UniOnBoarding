@@ -1,5 +1,14 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.13 — Validación en vivo del token efímero (3 bugs reales corregidos)
+
+- **Schema del setup de Gemini Live estaba mal**: la API rechaza `responseModalities` directo en `setup` (`Unknown name "responseModalities" at 'setup'`). Va dentro de **`generationConfig.responseModalities`** (junto a `speechConfig`). Corregido y verificado contra el WS real.
+- **El endpoint REST `auth_tokens` rechaza `liveConnectConstraints`** (`Unknown name at 'auth_token'`): el SDK lo mapea aparte; por REST solo se envían `uses`, `expireTime` y `newSessionExpireTime`. Quitado de `/api/voice-token`.
+- **Handshake verificado contra Google real**: mint v1beta → `wss://.../BidiGenerateContentConstrained?access_token=…` → `setupComplete` con `responseModalities:["AUDIO"]` (en Node el primer frame llega como binario; en Chrome llega como texto, el provider ya lo maneja).
+- Nota de modelo: `gemini-3.1-flash-live-preview` solo acepta modalidad `AUDIO` (rechaza `TEXT`).
+
+---
+
 ## 0.1.12 — Modo Voz sin keys para el usuario (tokens efimeros vía tu API)
 
 - **Problema de producto**: pedirle a un usuario común que genere y pegue una API key hace inviable distribuir la extensión (y expone la key en `chrome.storage`). Corregido con el patrón de **tokens efímeros**:
