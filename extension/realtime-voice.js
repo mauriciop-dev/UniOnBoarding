@@ -449,9 +449,19 @@ export class RealtimeVoiceSession {
       if (msg && msg.type === 'proob:pcm' && this._provider) {
         this._pcmCount = (this._pcmCount || 0) + 1;
         if (this._pcmCount === 1 || this._pcmCount % 200 === 0) {
-          console.log('[proob] chunks PCM recibidos en el sidepanel:', this._pcmCount);
+          const buf = (msg.data && msg.data.buffer) ? msg.data.buffer : msg.data;
+          let peak = 0;
+          try {
+            const arr = new Int16Array(buf);
+            for (let i = 0; i < arr.length; i++) {
+              const v = arr[i] < 0 ? -arr[i] : arr[i];
+              if (v > peak) peak = v;
+            }
+          } catch { /* dato no Int16 */ }
+          console.log('[proob] chunks PCM en sidepanel:', this._pcmCount, '| peak:', peak, '| envios fallidos:', this._pcmFail || 0);
         }
-        this._provider.sendAudio(msg.data);
+        const ok = this._provider.sendAudio(msg.data);
+        if (ok === false) this._pcmFail = (this._pcmFail || 0) + 1;
       }
     };
     chrome.runtime.onMessage.addListener(this._micListener);

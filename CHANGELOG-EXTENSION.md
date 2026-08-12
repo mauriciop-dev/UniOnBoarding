@@ -1,5 +1,13 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.21 — Diagnostico de amplitud del microfono (Gemini no detecta voz)
+
+- Los chunks PCM llegan al sidepanel pero Gemini no envia `serverContent`. Se instrumento el listener del microfono para reportar:
+  - `peak`: amplitud pico de los samples Int16 del chunk (0 = silencio → el audio no sale del microfono / ~10-20k = audio real).
+  - `envios fallidos`: cantidad de veces que `sendAudio` devolvio false (ws no abierto) → si crece, el audio no sale del panel.
+
+---
+
 ## 0.1.20 — Diagnostico del camino de audio de Gemini Live
 
 - Logs de diagnostico (1 vez por sesion / cada 200 chunks) para ubicar en que tramo falla:
