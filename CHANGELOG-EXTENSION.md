@@ -1,5 +1,16 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.20 — Diagnostico del camino de audio de Gemini Live
+
+- Logs de diagnostico (1 vez por sesion / cada 200 chunks) para ubicar en que tramo falla:
+  - `[proob] chunks PCM recibidos en el sidepanel: N` → el micro llega al panel.
+  - `[proob] Gemini envio serverContent: ...` → Gemini empezo a responder algo.
+  - `[proob] audio de respuesta de Gemini llegando a la sesion` → llego audio para reproducir.
+- Nota: intentamos habilitar `inputAudioTranscription` para mostrar lo que Gemini oye, pero la API rechaza el campo en esta version del schema (`1007 Unknown name ... input_audio_transcription`); se quito para no romper el setup. Si queremos transcripcion, hay que pasarla por `generationConfig`/otro campo segun docs vigentes.
+- Validado en vivo con el codigo real: conectando -> listo OK, sin regresiones (54/54 + 19/19).
+
+---
+
 ## 0.1.19 — Fix crash del worklet de salida (audio de respuesta sin canales)
 
 - El `process()` de `proob-sink` explotaba con `Uncaught TypeError ... 'length'` cuando el nodo quedaba sin canales de salida (nodo huerfano de intentos previos / contexto cerrandose). Ahora se valida `outputs[0]` y sus canales antes de leer `length`.

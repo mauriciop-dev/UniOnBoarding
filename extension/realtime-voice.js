@@ -121,6 +121,10 @@ export class GeminiLiveProvider {
     try { msg = JSON.parse(text); } catch { return; }
     if (msg.setupComplete) { this.onStatus?.('listo'); return; }
     if (msg.serverContent) {
+      if (!this._scLogged) {
+        this._scLogged = true;
+        console.log('[proob] Gemini envio serverContent:', Object.keys(msg.serverContent).join(','));
+      }
       const sc = msg.serverContent;
       if (sc.interrupted) { this.onStatus?.('interrumpido'); this.onTurnComplete?.('interrupted'); }
       if (sc.inputTranscription && sc.inputTranscription.text) {
@@ -442,7 +446,13 @@ export class RealtimeVoiceSession {
   async _startOffscreenMic() {
     await this._ensureOffscreenDoc();
     this._micListener = (msg) => {
-      if (msg && msg.type === 'proob:pcm' && this._provider) this._provider.sendAudio(msg.data);
+      if (msg && msg.type === 'proob:pcm' && this._provider) {
+        this._pcmCount = (this._pcmCount || 0) + 1;
+        if (this._pcmCount === 1 || this._pcmCount % 200 === 0) {
+          console.log('[proob] chunks PCM recibidos en el sidepanel:', this._pcmCount);
+        }
+        this._provider.sendAudio(msg.data);
+      }
     };
     chrome.runtime.onMessage.addListener(this._micListener);
     let res;
