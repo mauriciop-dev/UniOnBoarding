@@ -1,5 +1,13 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.25 — Causa raiz del "no se oye": process() del sink nunca corria
+
+- Hallazgo con la instrumentacion: el AudioContext estaba `running`, el sink recibia todo el PCM (`cola 515042` creciendo) **pero `process()` nunca se ejecutaba** → la cola no se vaciaba al parlante.
+- Causa (regla de Chromium): un `AudioWorkletNode` con entradas (default) pero SIN ninguna entrada conectada no recibe llamadas a `process()` (es "inactivo"). El microfono vive en el offscreen (otro AudioContext), asi que el sink del sidepanel quedaba sin entrada.
+- Fix: crear el sink como nodo fuente con `{ numberOfInputs: 0, outputChannelCount: [1] }` → el procesador corre siempre y vacia la cola a destination.
+
+---
+
 ## 0.1.24 — Diagnostico del sink de reproduccion (Gemini responde pero no se oye)
 
 - Subida RESUELTA: base64 arreglo el audio hacia Gemini (chunk aqui == chunk offscreen, >0) y Gemini responde con `serverContent` + audio.

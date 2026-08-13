@@ -408,7 +408,11 @@ export class RealtimeVoiceSession {
       console.log('[proob] AudioContext cambio de estado:', ctx.state);
       if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     };
-    this._sinkNode = new AudioWorkletNode(ctx, 'proob-sink');
+    // CRITICO: crear el sink con numberOfInputs: 0. Un AudioWorkletNode con una
+    // entrada sin conectar NO recibe llamadas a process() en Chromium (por eso
+    // la cola se llenaba pero no sonaba nada). Como "source node" (sin inputs)
+    // el procesador corre siempre y vacia la cola hacia destination.
+    this._sinkNode = new AudioWorkletNode(ctx, 'proob-sink', { numberOfInputs: 0, outputChannelCount: [1] });
     this._sinkNode.connect(ctx.destination);
 
     if (this._hasOffscreen()) await this._startOffscreenMic();
