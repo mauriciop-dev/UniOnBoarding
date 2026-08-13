@@ -17,6 +17,16 @@ function peakOfInt16(buf) {
   return peak;
 }
 
+function bytesToB64(bytes) {
+  const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  let bin = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < u8.length; i += CHUNK) {
+    bin += String.fromCharCode.apply(null, u8.subarray(i, i + CHUNK));
+  }
+  return btoa(bin);
+}
+
 async function start() {
   stop();
   const stream = await navigator.mediaDevices.getUserMedia({
@@ -31,7 +41,9 @@ async function start() {
   const node = new AudioWorkletNode(ctx, 'proob-mic-capture');
   node.port.onmessage = (e) => {
     if (!capture._logged) { capture._logged = true; console.log('[proob] PCM del microfono llegando al offscreen'); }
-    chrome.runtime.sendMessage({ type: 'proob:pcm', data: e.data, peak: peakOfInt16(e.data) });
+    // El ArrayBuffer se neutraliza en transito via chrome.runtime.sendMessage;
+    // se manda base64 (clonado binario garantizado) para no perder el audio.
+    chrome.runtime.sendMessage({ type: 'proob:pcm', data: bytesToB64(e.data), peak: peakOfInt16(e.data) });
   };
   src.connect(node);
   node.connect(ctx.destination); // imprescindible: sin conexion a destination el worklet no procesa

@@ -1,5 +1,14 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.23 — Causa raiz del "no te escucha": ArrayBuffer corrompido en chrome.runtime
+
+- Hallazgo: el microfono SI captura (nivel crudo 61.7%, chunk con peak 13775 al salir del offscreen) **pero el sidepanel recibe ese mismo chunk como 0**.
+- Causa: `chrome.runtime.sendMessage` con payload `ArrayBuffer` (offscreen -> sidepanel) entrega el buffer corrompido/neutralizado.
+- Fix: el offscreen envia el chunk como **string base64** (clonado binario garantizado) y el sidepanel lo decodifica antes de enviarlo a Gemini (`b64ToBytes`).
+- Se compara `chunk aqui` (sidepanel) vs `chunk al salir del offscreen` (offscreen): ahora deben coincidir (>0 ambos).
+
+---
+
 ## 0.1.22 — Diagnostico de silencio en la captura del microfono
 
 - `peak: 0` confirma que el microfono del offscreen captura silencio (los chunks fluyen pero son ceros).

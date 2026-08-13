@@ -455,12 +455,17 @@ export class RealtimeVoiceSession {
         return;
       }
       if (msg.type === 'proob:pcm' && this._provider) {
-        this._pcmCount = (this._pcmCount || 0) + 1;
-        let peak = -1;
+        let bytes = null;
         try {
-          const buf = (msg.data && msg.data.buffer) ? msg.data.buffer : msg.data;
-          const arr = new Int16Array(buf);
-          peak = 0;
+          if (typeof msg.data === 'string') bytes = b64ToBytes(msg.data);
+          else if (msg.data instanceof ArrayBuffer) bytes = new Uint8Array(msg.data);
+          else if (msg.data && msg.data.buffer) bytes = new Uint8Array(msg.data.buffer, msg.data.byteOffset, msg.data.byteLength);
+        } catch { /* dato inesperado */ }
+        if (!bytes) { console.log('[proob] chunk PCM sin datos utiles'); return; }
+        this._pcmCount = (this._pcmCount || 0) + 1;
+        let peak = 0;
+        try {
+          const arr = new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
           for (let i = 0; i < arr.length; i++) {
             const v = arr[i] < 0 ? -arr[i] : arr[i];
             if (v > peak) peak = v;
@@ -469,7 +474,7 @@ export class RealtimeVoiceSession {
         if (this._pcmCount === 1 || this._pcmCount % 200 === 0) {
           console.log('[proob] chunks PCM en sidepanel:', this._pcmCount, '| chunk aqui:', peak, '| chunk al salir del offscreen:', msg.peak, '| envios fallidos:', this._pcmFail || 0);
         }
-        const ok = this._provider.sendAudio(msg.data);
+        const ok = this._provider.sendAudio(bytes);
         if (ok === false) this._pcmFail = (this._pcmFail || 0) + 1;
       }
     };
