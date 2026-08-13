@@ -58,13 +58,19 @@ class ProobSink extends AudioWorkletProcessor {
     super();
     this.queue = new Float32Array(0);
     this.suspended = false;
+    this.pcm16Count = 0;
     this.port.onmessage = (e) => {
       const msg = e.data || {};
+      if (!this.firstMsg) { this.firstMsg = true; console.log('[proob] sink: worklet recibiendo mensajes'); }
       if (msg.type === 'pcm16') {
         const int16 = new Int16Array(msg.data);
         const floats = new Float32Array(int16.length);
         for (let i = 0; i < int16.length; i++) floats[i] = int16[i] / 32768;
         this._push(floats, msg.rate || 16000);
+        this.pcm16Count++;
+        if (this.pcm16Count <= 3 || this.pcm16Count % 20 === 0) {
+          console.log('[proob] sink: pcm16 #' + this.pcm16Count, 'samples', int16.length, 'rate', msg.rate, '| cola', this.queue.length);
+        }
       } else if (msg.type === 'float') {
         this._push(msg.data, msg.rate || sampleRate);
       } else if (msg.type === 'clear') {
@@ -106,6 +112,10 @@ class ProobSink extends AudioWorkletProcessor {
   process(outputs) {
     const out = outputs && outputs[0];
     if (!out || !out.length || !out[0]) return true;
+    if (!this.procLogged) {
+      this.procLogged = true;
+      console.log('[proob] sink: process() ACTIVO, sampleRate del contexto:', sampleRate, '| suspended:', this.suspended, '| cola inicial:', this.queue.length);
+    }
     const n = out[0].length;
     if (!this.suspended && this.queue.length) {
       const read = Math.min(n, this.queue.length);

@@ -1,5 +1,15 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.24 — Diagnostico del sink de reproduccion (Gemini responde pero no se oye)
+
+- Subida RESUELTA: base64 arreglo el audio hacia Gemini (chunk aqui == chunk offscreen, >0) y Gemini responde con `serverContent` + audio.
+- Falta el tramo final: la reproduccion local. Se instrumenta:
+  - `[proob] AudioContext (reproduccion) estado:` al crear el contexto + `onstatechange` (re-intenta `resume()` si queda `suspended` — sospecha: autoplay del sidepanel).
+  - `[proob] play: primer frame pcm16 bytes N rate R` y aviso si no hay `sinkNode`.
+  - En el worklet `proob-sink`: `sink: worklet recibiendo mensajes`, `sink: pcm16 #N samples M rate R | cola L` y `sink: process() ACTIVO` (distingue contexto suspendido vs datos rotos vs cola parada).
+
+---
+
 ## 0.1.23 — Causa raiz del "no te escucha": ArrayBuffer corrompido en chrome.runtime
 
 - Hallazgo: el microfono SI captura (nivel crudo 61.7%, chunk con peak 13775 al salir del offscreen) **pero el sidepanel recibe ese mismo chunk como 0**.

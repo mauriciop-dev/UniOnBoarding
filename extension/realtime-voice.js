@@ -403,6 +403,11 @@ export class RealtimeVoiceSession {
       : 'voice-worklet.js';
     await ctx.audioWorklet.addModule(workletUrl);
     if (ctx.state === 'suspended') await ctx.resume();
+    console.log('[proob] AudioContext (reproduccion) estado:', ctx.state, 'sampleRate:', ctx.sampleRate);
+    ctx.onstatechange = () => {
+      console.log('[proob] AudioContext cambio de estado:', ctx.state);
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    };
     this._sinkNode = new AudioWorkletNode(ctx, 'proob-sink');
     this._sinkNode.connect(ctx.destination);
 
@@ -514,7 +519,18 @@ export class RealtimeVoiceSession {
       this._playedLogged = true;
       console.log('[proob] audio de respuesta de Gemini llegando a la sesion');
     }
-    if (this._sinkNode) this._sinkNode.port.postMessage({ type: 'pcm16', data: pcm16, rate });
+    if (this._sinkNode) {
+      if (!this._frameLogged) {
+        this._frameLogged = true;
+        console.log('[proob] play: primer frame pcm16 bytes', (pcm16 && pcm16.byteLength) || 0, 'rate', rate, '| sink conectado:', true);
+      }
+      this._sinkNode.port.postMessage({ type: 'pcm16', data: pcm16, rate });
+    } else {
+      if (!this._sinkLogged) {
+        this._sinkLogged = true;
+        console.log('[proob] play: NO hay sinkNode (no se reproducira nada)');
+      }
+    }
   }
 
   _clearAudio() {
