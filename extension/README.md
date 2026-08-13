@@ -1,4 +1,4 @@
-# ProOnboarding - Extensión Chrome (v0.1.12)
+# ProOnboarding - Extensión Chrome (v0.1.28)
 
 Extensión MV3 que consume la API de ProOnboarding desplegada en Vercel. Analiza la página actual, muestra un resumen y guía un recorrido interactivo con audio (TTS) y resaltado visual de elementos.
 
@@ -14,7 +14,7 @@ extension/
 ├── ai-engine.js               # Cliente del API de análisis (cloud)
 ├── tts-provider.js            # Motor de voz unificado (cloud TTS / Web Speech local)
 ├── realtime-voice.js          # Modo Voz: Gemini Live + Deepgram Agent (WebSocket)
-├── voice-worklet.js           # AudioWorklets: captura del mic y sink de reproducción
+├── voice-worklet.js           # AudioWorklet: captura del mic (PCM16 16 kHz); la reproducción va por AudioBufferSourceNode
 ├── content.js                 # Inyectado en cada página: limpieza DOM + overlay + flujo condicional
 ├── content.css                # Estilos del resaltado, etiquetas, ayuda y toast
 ├── icons/                     # icon16, icon48, icon128
