@@ -128,7 +128,7 @@ proonboarding-api/
 - [x] **Side Panel v2**: rediseño visual completo que combine chat + tarjetas contextuales.
 - [x] **Capa Voicebox** configurable con el **contrato real** (`GET /profiles` + `POST /generate/stream`). Repo `mauriciop-dev/voicebox` accesible y alineado.
 - [x] **L1 Gemini Live** (FASE 5): WebSocket directo con `GEMINI_API_KEY` (sin IAM). + **Deepgram Agent** como segundo proveedor (think Google BYO con tu Gemini key en el payload, sin consola).
-- [ ] Probar el Modo Voz en vivo en Chrome (mic + reproducción) y ajustar worklets si es necesario.
+- [x] Probar el Modo Voz en vivo en Chrome (mic + reproducción) y ajustar worklets si es necesario.
 - [x] **L2 Deepgram (producción)**: modelos Aura-2 reales, auth `Token`, verificado en prod.
 
 ### Pendientes técnicos / producto
@@ -136,7 +136,7 @@ proonboarding-api/
 - [ ] Soporte `lang` automático según la página (`document.documentElement.lang`).
 - [ ] Detección de frustración / onboarding contextual proactivo.
 - [ ] Tests unitarios para `validateShape` / `cleanDOM`; lint en CI.
-- [ ] Empaquetar y publicar en Chrome Web Store.
+- [ ] Empaquetado listo: `node scripts/package-store.mjs` genera `proonboarding-<version>.zip` (allowlist + scan de secretos; sin keys de dev). Falta subirlo a la Chrome Web Store.
 
 ---
 
