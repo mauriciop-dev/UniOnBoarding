@@ -323,7 +323,8 @@ export class RealtimeVoiceSession {
     this._connectWatchdog = null;
     this._audioCtx = null;
     this._micNode = null;
-    this._sinkNode = null;
+this._sinkNode = null;
+    this._keepAlive = null;
     this._stream = null;
     this._lastUserPartial = '';
     this._lastAssistantPartial = '';
@@ -408,12 +409,20 @@ export class RealtimeVoiceSession {
       console.log('[proob] AudioContext cambio de estado:', ctx.state);
       if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     };
-    // CRITICO: crear el sink con numberOfInputs: 0. Un AudioWorkletNode con una
-    // entrada sin conectar NO recibe llamadas a process() en Chromium (por eso
-    // la cola se llenaba pero no sonaba nada). Como "source node" (sin inputs)
-    // el procesador corre siempre y vacia la cola hacia destination.
-    this._sinkNode = new AudioWorkletNode(ctx, 'proob-sink', { numberOfInputs: 0, outputChannelCount: [1] });
+    this._sinkNode = new AudioWorkletNode(ctx, 'proob-sink', { numberOfInputs: 1, outputChannelCount: [1] });
     this._sinkNode.connect(ctx.destination);
+    // Mantener el sink ACTIVO: en Chromium un AudioWorkletNode no recibe llamadas
+    // a process() si no tiene por lo menos UNA entrada CONECTADA (y puede entregar
+    // outputs[0] vacio). Un oscilador conectado via un gain en 0 le da entrada real
+    // sin sonar nada; asi process() corre siempre y la cola se vacia al parlante.
+    const keepOsc = ctx.createOscillator();
+    keepOsc.frequency.value = 1;
+    const keepGain = ctx.createGain();
+    keepGain.gain.value = 0;
+    keepOsc.connect(keepGain);
+    keepGain.connect(this._sinkNode);
+    keepOsc.start();
+    this._keepAlive = { osc: keepOsc, gain: keepGain };
 
     if (this._hasOffscreen()) await this._startOffscreenMic();
     else await this._startInlineMic(ctx);
@@ -586,6 +595,12 @@ export class RealtimeVoiceSession {
     try { if (this._stream) this._stream.getTracks().forEach((t) => t.stop()); } catch { this._stream = null; }
     if (this._micNode) { try { this._micNode.disconnect(); } catch { } this._micNode = null; }
     if (this._sinkNode) { try { this._sinkNode.disconnect(); } catch { } this._sinkNode = null; }
+    if (this._keepAlive) {
+      try { this._keepAlive.osc.stop(); } catch { }
+      try { this._keepAlive.osc.disconnect(); } catch { }
+      try { this._keepAlive.gain.disconnect(); } catch { }
+      this._keepAlive = null;
+    }
     try { if (this._audioCtx) await this._audioCtx.close(); } catch { this._audioCtx = null; }
     await this._stopOffscreenMic();
   }

@@ -1,5 +1,13 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.26 — Fix definitivo del sink: entrada de silencio para activar process()
+
+- `numberOfInputs: 0` no alcanzo: la cola seguia creciendo y `process()` no corria.
+- Confirmado con fuentes (WebAudio/Chromium): un AudioWorkletNode no recibe `process()` si no tiene por lo menos UNA entrada CONECTADA (y puede entregar outputs vacios).
+- Fix: un oscilador conectado al input del sink via un gain en 0 (silencio, inaudible) mantiene el nodo activo para siempre → `process()` corre, la cola drena al parlante.
+
+---
+
 ## 0.1.25 — Causa raiz del "no se oye": process() del sink nunca corria
 
 - Hallazgo con la instrumentacion: el AudioContext estaba `running`, el sink recibia todo el PCM (`cola 515042` creciendo) **pero `process()` nunca se ejecutaba** → la cola no se vaciaba al parlante.
