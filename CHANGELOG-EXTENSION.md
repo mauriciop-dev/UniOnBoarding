@@ -1,5 +1,19 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.28 — Modo Voz confirmado en vivo + limpieza de logs y diagnostico
+
+- **CONFIRMADO EN VIVO por el usuario**: habla, Gemini escucha y responde con audio, y se oye por el parlante (`play: primer buffer programado`). FASE 5 completa de punta a punta.
+- **`envios fallidos` explicado**: los 17 pasaron todos en el arranque, antes de que el WebSocket estuviera abierto (readyState != OPEN); despues todo fluyo normal.
+- Fix: `sendAudio` de ambos providers ahora **bufferiza hasta 100 chunks** mientras el WS establece y los vuelca en orden al primer envio con WS abierto → no se pierde el arranque de la conversacion.
+- **Limpieza de logs de diagnostico** (ruido de la investigacion):
+  - Quitado `nivel microfono crudo` (AnalyserNode 500 ms), `chunks PCM en sidepanel` (cada 200) y el `micpeak` del offscreen (el medidor del `request-mic.html` ya da feedback visual).
+  - `proob:pcm` ya no lleva `peak` en el mensaje (menos serializacion offscreen→panel).
+  - Quitado el processor `proob-sink` del worklet (codigo muerto tras 0.1.27); README actualizado.
+  - Logs conservados (1 sola vez, utiles): estado del AudioContext, `serverContent` de Gemini, `primer buffer programado`, `microfono capturando`, y aviso cada 50 chunks diferidos si el WS tardara.
+- Bump 0.1.28 (manifest).
+
+---
+
 ## 0.1.27 — Reproduccion por AudioBufferSourceNode (se abandona el worklet sink)
 
 - El keep-alive logro que `process()` corra, pero la cola sigue creciendo/fluctuando (hasta 792572 samples): el AudioWorkletNode no drena confiablemente en Chromium para esta tuberia.

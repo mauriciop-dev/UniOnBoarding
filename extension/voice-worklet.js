@@ -1,10 +1,10 @@
-// voice-worklet.js — AudioWorklet processors para el Modo Voz de ProOnboarding.
+// voice-worklet.js — AudioWorklet processor para el Modo Voz de ProOnboarding.
 //
 // proob-mic-capture: captura el microfono en el contexto de audio y emite
 //   chunks de PCM16 mono a 16 kHz (20 ms / 320 muestras) via port.
-// proob-sink: cola de reproduccion de audio. Recibe PCM16 (con su sample
-//   rate origen) o Float32 via port, re-muestrea al sample rate del
-//   contexto y lo emite a destination.
+//
+// (La reproduccion de la respuesta NO usa worklet: va por AudioBufferSourceNode
+// en realtime-voice.js, API clasica mas confiable en Chromium.)
 
 class ProobMicCapture extends AudioWorkletProcessor {
   constructor() {
@@ -53,85 +53,4 @@ class ProobMicCapture extends AudioWorkletProcessor {
   }
 }
 
-class ProobSink extends AudioWorkletProcessor {
-  constructor() {
-    super();
-    this.queue = new Float32Array(0);
-    this.suspended = false;
-    this.pcm16Count = 0;
-    this.port.onmessage = (e) => {
-      const msg = e.data || {};
-      if (!this.firstMsg) { this.firstMsg = true; console.log('[proob] sink: worklet recibiendo mensajes'); }
-      if (msg.type === 'pcm16') {
-        const int16 = new Int16Array(msg.data);
-        const floats = new Float32Array(int16.length);
-        for (let i = 0; i < int16.length; i++) floats[i] = int16[i] / 32768;
-        this._push(floats, msg.rate || 16000);
-        this.pcm16Count++;
-        if (this.pcm16Count <= 3 || this.pcm16Count % 20 === 0) {
-          console.log('[proob] sink: pcm16 #' + this.pcm16Count, 'samples', int16.length, 'rate', msg.rate, '| cola', this.queue.length);
-        }
-      } else if (msg.type === 'float') {
-        this._push(msg.data, msg.rate || sampleRate);
-      } else if (msg.type === 'clear') {
-        this.queue = new Float32Array(0);
-      } else if (msg.type === 'suspend') {
-        this.suspended = true;
-      } else if (msg.type === 'resume') {
-        this.suspended = false;
-      }
-    };
-  }
-
-  _push(src, srcRate) {
-    if (srcRate !== sampleRate) {
-      const outLen = Math.round((src.length * sampleRate) / srcRate);
-      const out = new Float32Array(outLen);
-      const ratio = srcRate / sampleRate;
-      for (let i = 0; i < outLen; i++) {
-        const pos = i * ratio;
-        const i0 = Math.floor(pos);
-        const frac = pos - i0;
-        const a = src[i0] || 0;
-        const b = i0 + 1 < src.length ? src[i0 + 1] : a;
-        out[i] = a + (b - a) * frac;
-      }
-      this._enqueue(out);
-    } else {
-      this._enqueue(src);
-    }
-  }
-
-  _enqueue(data) {
-    const q = new Float32Array(this.queue.length + data.length);
-    q.set(this.queue);
-    q.set(data, this.queue.length);
-    this.queue = q;
-  }
-
-  process(outputs) {
-    const out = outputs && outputs[0];
-    if (!out || !out.length || !out[0]) return true;
-    if (!this.procLogged) {
-      this.procLogged = true;
-      console.log('[proob] sink: process() ACTIVO, sampleRate del contexto:', sampleRate, '| suspended:', this.suspended, '| cola inicial:', this.queue.length);
-    }
-    const n = out[0].length;
-    if (!this.suspended && this.queue.length) {
-      const read = Math.min(n, this.queue.length);
-      for (let c = 0; c < out.length; c++) {
-        out[c].set(this.queue.subarray(0, read));
-      }
-      if (read < n) {
-        for (let c = 0; c < out.length; c++) out[c].fill(0, read);
-      }
-      this.queue = this.queue.subarray(read);
-    } else {
-      for (let c = 0; c < out.length; c++) out[c].fill(0);
-    }
-    return true;
-  }
-}
-
 registerProcessor('proob-mic-capture', ProobMicCapture);
-registerProcessor('proob-sink', ProobSink);

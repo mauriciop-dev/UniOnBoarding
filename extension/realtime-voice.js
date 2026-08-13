@@ -155,14 +155,35 @@ export class GeminiLiveProvider {
   }
 
   sendAudio(pcm16Bytes) {
-    if (!this.ws || this.ws.readyState !== 1) return false;
-    this.ws.send(JSON.stringify({
-      realtimeInput: { audio: { data: bytesToB64(pcm16Bytes), mimeType: 'audio/pcm;rate=16000' } }
-    }));
-    return true;
+    if (this.ws && this.ws.readyState === 1) {
+      // Si hubo chunks guardados mientras el WS conectaba, volcarlos en orden
+      // (los mas viejos primero) antes del chunk fresco.
+      if (this._pendingAudio && this._pendingAudio.length) {
+        const pending = this._pendingAudio;
+        this._pendingAudio = null;
+        for (const b of pending) {
+          try {
+            this.ws.send(JSON.stringify({
+              realtimeInput: { audio: { data: bytesToB64(b), mimeType: 'audio/pcm;rate=16000' } }
+            }));
+          } catch { }
+        }
+      }
+      this.ws.send(JSON.stringify({
+        realtimeInput: { audio: { data: bytesToB64(pcm16Bytes), mimeType: 'audio/pcm;rate=16000' } }
+      }));
+      return true;
+    }
+    // Aun estableciendo el WS (o cerrado): retener un tope de chunks para no
+    // perder el arranque de la conversacion; se vuelcan al primer envio con WS
+    // abierto. Devuelve false (envio diferido) para que el contador de fallos
+    // no aplique a estos chunks, que SI se entregaran.
+    this._pendingAudio = this._pendingAudio || [];
+    if (this._pendingAudio.length < 100) this._pendingAudio.push(pcm16Bytes);
+    return false;
   }
 
-  close() { try { if (this.ws) this.ws.close(); } catch { this.ws = null; } }
+  close() { try { if (this.ws) this.ws.close(); } catch { this.ws = null; } this._pendingAudio = null; }
 }
 
 // ---------------------------------------------------------------------------
@@ -301,12 +322,24 @@ export class DeepgramAgentProvider {
   }
 
   sendAudio(pcm16Bytes) {
-    if (!this.ws || this.ws.readyState !== 1) return false;
-    this.ws.send(pcm16Bytes);
-    return true;
+    if (this.ws && this.ws.readyState === 1) {
+      if (this._pendingAudio && this._pendingAudio.length) {
+        const pending = this._pendingAudio;
+        this._pendingAudio = null;
+        for (const b of pending) {
+          try { this.ws.send(b); } catch { }
+        }
+      }
+      this.ws.send(pcm16Bytes);
+      return true;
+    }
+    // Ver comentario en GeminiLiveProvider.sendAudio: buffer de arranque.
+    this._pendingAudio = this._pendingAudio || [];
+    if (this._pendingAudio.length < 100) this._pendingAudio.push(pcm16Bytes);
+    return false;
   }
 
-  close() { try { if (this.ws) this.ws.close(); } catch { this.ws = null; } }
+  close() { try { if (this.ws) this.ws.close(); } catch { this.ws = null; } this._pendingAudio = null; }
 }
 
 // ---------------------------------------------------------------------------
@@ -451,13 +484,6 @@ export class RealtimeVoiceSession {
     await this._ensureOffscreenDoc();
     this._micListener = (msg) => {
       if (!msg) return;
-      if (msg.type === 'proob:micpeak') {
-        this._micpeakCount = (this._micpeakCount || 0) + 1;
-        if (this._micpeakCount === 1 || this._micpeakCount % 8 === 1) {
-          console.log('[proob] nivel microfono crudo (offscreen):', ((msg.peak || 0) * 100).toFixed(1) + '%');
-        }
-        return;
-      }
       if (msg.type === 'proob:pcm' && this._provider) {
         let bytes = null;
         try {
@@ -467,19 +493,16 @@ export class RealtimeVoiceSession {
         } catch { /* dato inesperado */ }
         if (!bytes) { console.log('[proob] chunk PCM sin datos utiles'); return; }
         this._pcmCount = (this._pcmCount || 0) + 1;
-        let peak = 0;
-        try {
-          const arr = new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
-          for (let i = 0; i < arr.length; i++) {
-            const v = arr[i] < 0 ? -arr[i] : arr[i];
-            if (v > peak) peak = v;
-          }
-        } catch { /* dato no Int16 */ }
-        if (this._pcmCount === 1 || this._pcmCount % 200 === 0) {
-          console.log('[proob] chunks PCM en sidepanel:', this._pcmCount, '| chunk aqui:', peak, '| chunk al salir del offscreen:', msg.peak, '| envios fallidos:', this._pcmFail || 0);
+        if (this._pcmCount === 1) {
+          console.log('[proob] microfono capturando en offscreen; audio fluyendo al proveedor');
         }
         const ok = this._provider.sendAudio(bytes);
-        if (ok === false) this._pcmFail = (this._pcmFail || 0) + 1;
+        if (ok === false) {
+          this._pcmFail = (this._pcmFail || 0) + 1;
+          if (this._pcmFail === 1 || this._pcmFail % 50 === 0) {
+            console.log('[proob] aviso: chunks diferidos por WS en conexion, total', this._pcmFail);
+          }
+        }
       }
     };
     chrome.runtime.onMessage.addListener(this._micListener);
@@ -520,8 +543,8 @@ export class RealtimeVoiceSession {
     }
     if (this._audioCtx) {
       this._playBuffer({ pcm16, rate });
-    } else if (!this._sinkLogged) {
-      this._sinkLogged = true;
+    } else if (!this._noCtxLogged) {
+      this._noCtxLogged = true;
       console.log('[proob] play: sin contexto de audio');
     }
   }
@@ -561,8 +584,8 @@ export class RealtimeVoiceSession {
     const at = this._nextPlayAt && this._nextPlayAt > now ? this._nextPlayAt : now;
     src.start(at);
     this._playCountTotal = (this._playCountTotal || 0) + 1;
-    if (this._playCountTotal <= 3) {
-      console.log('[proob] play: programado buffer', outLen, 'samples (', dur.toFixed(2), 's ) en t+', Math.max(0, at - now).toFixed(3));
+    if (this._playCountTotal === 1) {
+      console.log('[proob] play: primer buffer programado', outLen, 'samples (', dur.toFixed(2), 's ) en formato BufferSource');
     }
     this._activeSources.push(src);
     src.onended = () => {

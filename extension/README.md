@@ -85,7 +85,7 @@ Si quieres iterar con el backend en `localhost`:
 ## FASE 5 — Modo Voz en tiempo real
 
 - **Barra de voz en el chat**: botón **Hablar** (mantener la conversación de voz), **Detener**, selector de proveedor (Gemini Live / Deepgram Agent) y estado en vivo (escuchando / respondiendo…).
-- **Conversación bidireccional**: el micrófono se captura en un AudioWorklet (PCM16 16 kHz) y se envía al proveedor; la respuesta de audio se reproduce por otro worklet remuestreado al rate del contexto (`proob-sink`).
+- **Conversación bidireccional**: el micrófono se captura con un AudioWorklet (PCM16 16 kHz) en un offscreen document y se envía al proveedor; la respuesta de audio se reproduce con `AudioBufferSourceNode` encadenados (remuestreo al rate del contexto con interpolación lineal, sin huecos).
 - **Transcript en el chat**: lo que dices y la respuesta del asistente aparecen como burbujas del chat, con el contexto de la página (plataforma + pasos) inyectado en el prompt del agente.
 - **Proveedores**:
   - **Gemini Live**: WebSocket `wss://generativelanguage.googleapis.com/ws/.../BidiGenerateContent?key=…` (dev) o `...BidiGenerateContentConstrained?access_token=…` (producción con token efímero); mensajes JSON `setup` → `realtimeInput` → `serverContent` (transcripciones + `inlineData` PCM 24 kHz).
