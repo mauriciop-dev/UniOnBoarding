@@ -323,8 +323,8 @@ export class RealtimeVoiceSession {
     this._connectWatchdog = null;
     this._audioCtx = null;
     this._micNode = null;
-this._sinkNode = null;
-    this._keepAlive = null;
+    this._activeSources = [];
+    this._nextPlayAt = null;
     this._stream = null;
     this._lastUserPartial = '';
     this._lastAssistantPartial = '';
@@ -409,20 +409,6 @@ this._sinkNode = null;
       console.log('[proob] AudioContext cambio de estado:', ctx.state);
       if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     };
-    this._sinkNode = new AudioWorkletNode(ctx, 'proob-sink', { numberOfInputs: 1, outputChannelCount: [1] });
-    this._sinkNode.connect(ctx.destination);
-    // Mantener el sink ACTIVO: en Chromium un AudioWorkletNode no recibe llamadas
-    // a process() si no tiene por lo menos UNA entrada CONECTADA (y puede entregar
-    // outputs[0] vacio). Un oscilador conectado via un gain en 0 le da entrada real
-    // sin sonar nada; asi process() corre siempre y la cola se vacia al parlante.
-    const keepOsc = ctx.createOscillator();
-    keepOsc.frequency.value = 1;
-    const keepGain = ctx.createGain();
-    keepGain.gain.value = 0;
-    keepOsc.connect(keepGain);
-    keepGain.connect(this._sinkNode);
-    keepOsc.start();
-    this._keepAlive = { osc: keepOsc, gain: keepGain };
 
     if (this._hasOffscreen()) await this._startOffscreenMic();
     else await this._startInlineMic(ctx);
@@ -532,22 +518,66 @@ this._sinkNode = null;
       this._playedLogged = true;
       console.log('[proob] audio de respuesta de Gemini llegando a la sesion');
     }
-    if (this._sinkNode) {
-      if (!this._frameLogged) {
-        this._frameLogged = true;
-        console.log('[proob] play: primer frame pcm16 bytes', (pcm16 && pcm16.byteLength) || 0, 'rate', rate, '| sink conectado:', true);
-      }
-      this._sinkNode.port.postMessage({ type: 'pcm16', data: pcm16, rate });
-    } else {
-      if (!this._sinkLogged) {
-        this._sinkLogged = true;
-        console.log('[proob] play: NO hay sinkNode (no se reproducira nada)');
-      }
+    if (this._audioCtx) {
+      this._playBuffer({ pcm16, rate });
+    } else if (!this._sinkLogged) {
+      this._sinkLogged = true;
+      console.log('[proob] play: sin contexto de audio');
     }
   }
 
+  // Reproduccion por AudioBufferSourceNode (API clasica garantizada por el motor
+  // de audio; el AudioWorklet como sink fue poco confiable en Chromium: process()
+  // corre solo a ratos y la cola no drena). Cada frame se encadena sin huecos.
+  _playBuffer({ pcm16, rate }) {
+    if (!pcm16 || !pcm16.byteLength || pcm16.byteLength < 4) return;
+    if (!this._audioCtx || this._audioCtx.state === 'closed') return;
+    const ctx = this._audioCtx;
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const int16 = pcm16 instanceof Int16Array ? pcm16 : new Int16Array(
+      pcm16.buffer ? pcm16.buffer : pcm16,
+      pcm16.byteOffset || 0,
+      Math.floor((pcm16.byteLength || pcm16.length) / 2)
+    );
+    const srcRate = rate || 24000;
+    const samples = int16.length;
+    const dur = samples / srcRate;
+    const outLen = Math.max(1, Math.round(dur * ctx.sampleRate));
+    const buffer = ctx.createBuffer(1, outLen, ctx.sampleRate);
+    const ch = buffer.getChannelData(0);
+    const ratio = srcRate / ctx.sampleRate;
+    for (let i = 0; i < outLen; i++) {
+      const pos = i * ratio;
+      const i0 = Math.floor(pos);
+      const frac = pos - i0;
+      const s0 = (int16[i0] || 0) / 32768;
+      const s1 = (i0 + 1 < samples ? int16[i0 + 1] : s0) / 32768;
+      ch[i] = s0 + (s1 - s0) * frac;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(ctx.destination);
+    const now = ctx.currentTime;
+    const at = this._nextPlayAt && this._nextPlayAt > now ? this._nextPlayAt : now;
+    src.start(at);
+    this._playCountTotal = (this._playCountTotal || 0) + 1;
+    if (this._playCountTotal <= 3) {
+      console.log('[proob] play: programado buffer', outLen, 'samples (', dur.toFixed(2), 's ) en t+', Math.max(0, at - now).toFixed(3));
+    }
+    this._activeSources.push(src);
+    src.onended = () => {
+      const i = this._activeSources.indexOf(src);
+      if (i >= 0) this._activeSources.splice(i, 1);
+    };
+    this._nextPlayAt = at + dur;
+  }
+
   _clearAudio() {
-    if (this._sinkNode) this._sinkNode.port.postMessage({ type: 'clear' });
+    for (const src of this._activeSources) {
+      try { src.stop(); } catch { }
+    }
+    this._activeSources = [];
+    this._nextPlayAt = null;
   }
 
   _onUserText(t, final) {
@@ -594,13 +624,7 @@ this._sinkNode = null;
     try { if (this._provider) this._provider.close(); } catch { this._provider = null; }
     try { if (this._stream) this._stream.getTracks().forEach((t) => t.stop()); } catch { this._stream = null; }
     if (this._micNode) { try { this._micNode.disconnect(); } catch { } this._micNode = null; }
-    if (this._sinkNode) { try { this._sinkNode.disconnect(); } catch { } this._sinkNode = null; }
-    if (this._keepAlive) {
-      try { this._keepAlive.osc.stop(); } catch { }
-      try { this._keepAlive.osc.disconnect(); } catch { }
-      try { this._keepAlive.gain.disconnect(); } catch { }
-      this._keepAlive = null;
-    }
+    this._clearAudio();
     try { if (this._audioCtx) await this._audioCtx.close(); } catch { this._audioCtx = null; }
     await this._stopOffscreenMic();
   }

@@ -1,5 +1,14 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.1.27 — Reproduccion por AudioBufferSourceNode (se abandona el worklet sink)
+
+- El keep-alive logro que `process()` corra, pero la cola sigue creciendo/fluctuando (hasta 792572 samples): el AudioWorkletNode no drena confiablemente en Chromium para esta tuberia.
+- Fix: la respuesta de audio ahora se reproduce con `AudioBufferSourceNode` encadenados (API clasica, la MISMA que usa el TTS del tour). Cada frame PCM16 (24 kHz) se remuestrea por interpolacion lineal al rate del contexto y se programa sin huecos contra `currentTime`.
+- Se quita el worklet sink, el keep-alive y su limpieza; `stop()`/interrupcion cortan todas las fuentes activas.
+- Logs utiles: `play: programado buffer N samples (S s ) en t+X`.
+
+---
+
 ## 0.1.26 — Fix definitivo del sink: entrada de silencio para activar process()
 
 - `numberOfInputs: 0` no alcanzo: la cola seguia creciendo y `process()` no corria.
