@@ -828,8 +828,6 @@ function wire() {
       sendChatMessage();
     }
   });
-  $('tab-inicio').addEventListener('click', () => switchTab('inicio'));
-  $('tab-chat').addEventListener('click', () => switchTab('chat'));
   document.querySelectorAll('.avatar-opt').forEach((btn) => {
     btn.addEventListener('click', () => setAvatar(btn.dataset.avatar));
   });
