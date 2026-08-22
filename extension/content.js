@@ -90,7 +90,25 @@
       const hash = computeDomHash(html);
       if (!hash || hash === lastObservedHash) return;
       lastObservedHash = hash;
-      chrome.runtime.sendMessage({ type: 'PROOB_DOM_CHANGED', dom_hash: hash }).catch(() => {});
+      // Si la extension fue recargada mientras la pagina seguia abierta,
+      // Chrome invalida este contexto. Detener el observer evita errores
+      // repetidos en cada mutacion posterior del DOM.
+      try {
+        if (!chrome.runtime?.id) {
+          stopDomObserver();
+          return;
+        }
+        const pending = chrome.runtime.sendMessage({ type: 'PROOB_DOM_CHANGED', dom_hash: hash });
+        pending?.catch?.((err) => {
+          if (/context invalidated|receiving end does not exist/i.test(String(err?.message || err))) {
+            stopDomObserver();
+          }
+        });
+      } catch (err) {
+        if (/context invalidated|receiving end does not exist/i.test(String(err?.message || err))) {
+          stopDomObserver();
+        }
+      }
     }, 500);
   }
 
