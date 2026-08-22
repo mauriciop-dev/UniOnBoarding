@@ -758,7 +758,7 @@ function appendVoiceAssistant(txt, final) {
 async function startVoice() {
   stopSpeaking();
   showView('chat');
-  const provider = $('voice-provider').value;
+  const provider = REALTIME_PROVIDERS.GEMINI_LIVE;
   state.voiceProvider = provider;
 
   // Produccion: token efimero del backend (sin keys del usuario). Fallback:
@@ -786,11 +786,10 @@ async function startVoice() {
     language: state.lang,
     prompt,
     agentSettings,
-    onUserText: (txt, final) => {
-      appendVoiceUser(txt);
-      if (final) voiceUserEl = null;
-    },
-    onAssistantText: (txt, final) => appendVoiceAssistant(txt, final),
+    // El modo voz es audio-first: no duplica la conversación en el historial
+    // del chat. El texto escrito conserva su propio hilo separado.
+    onUserText: () => {},
+    onAssistantText: () => {},
     onTurnComplete: () => setVoiceStatus('Voz activa', 'live'),
     onStatus: (s) => mapVoiceStatus(s),
     onError: (err) => {
@@ -918,14 +917,6 @@ function wire() {
 
   const voiceBtn = $('voice-btn');
   if (voiceBtn) voiceBtn.addEventListener('click', toggleVoice);
-  const voiceProvider = $('voice-provider');
-  if (voiceProvider) {
-    voiceProvider.value = state.voiceProvider;
-    voiceProvider.addEventListener('change', (e) => {
-      state.voiceProvider = e.target.value;
-      chrome.storage.local.set({ [STORAGE_KEYS.voiceProvider]: e.target.value });
-    });
-  }
 }
 
 (async function init() {

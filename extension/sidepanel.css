@@ -541,6 +541,8 @@ button.link {
 
 /* ===== Modo Voz (realtime) ===== */
 .voice-bar { display: flex; align-items: center; gap: 8px; }
+.topbar-voice { display: flex; align-items: center; gap: 6px; margin-left: auto; margin-right: 8px; min-width: 0; }
+.topbar-voice .voice-status { max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .voice-btn {
   display: flex;
   align-items: center;
