@@ -1,0 +1,104 @@
+MEJORAS ONBOARDING
+
+# ProOnboarding - Documentación de Arquitectura, Flujo Multimodal y Lineamientos de Diseño
+
+Este documento consolida la estrategia técnica, la lógica de interacción adaptativa (Voz/Chat) y los patrones de interfaz de usuario para la extensión de Chrome **ProOnboarding**. Su propósito es guiar al usuario de forma interactiva en cualquier interfaz web sin requerir escaneos manuales previos ni cargas innecesarias.
+
+---
+
+## 🏗️ 1. Arquitectura Técnica y Flujo del Sistema
+
+Para operar en cualquier sitio de internet de manera fluida (*frictionless*), la extensión elimina el botón de escaneo manual ("Esta página"). El `Content Script` lee el DOM de forma reactiva y en segundo plano inmediatamente cuando el usuario abre el panel lateral o interactúa.
+
+### Flujo de Operación en Tiempo Real
+
+1. **Captura de la Intención:** El usuario solicita asistencia de manera multimodal (hablando mediante el micrófono o escribiendo en el chat de la extensión).
+2. **Lectura Instantánea del DOM:** El `Content Script` extrae el árbol HTML visible (filtrando solo elementos interactivos como `<a>`, `<button>`, `<input>`) y envía los textos/IDs a la API del backend.
+3. **Análisis Semántico (IA):** La IA determina cuál de los elementos de la pantalla corresponde al paso solicitado.
+4. **Inyección de Eventos y Resaltado:** 
+   - Se aplica una clase CSS para iluminar estéticamente el elemento objetivo.
+   - Se añade un `Event Listener` de tipo `click` únicamente a ese elemento.
+5. **Avanzar por Eventos:** Al hacer clic, el script limpia el diseño anterior, el detector se destruye y la IA genera de forma automatizada la siguiente instrucción en base a los cambios detectados por un `MutationObserver`.
+6. **Tarjeta y asistente:**
+-Junto a cada instrucción grafica en pantalla de aparecer una de dos o las dos:
+   -una tarjeta visual con la estética css predefinida en la extension con una frase que complemente la accion que debe realizar el usuario o un recordatorio.
+   -Un pequeño Bot indicando el botón o el lugar en donde debe hacer clic el usuario, si solo es hacer clic.
+
+---
+
+## 💬 2. Modo Accesibilidad: Interacción Híbrida (Voz + Chat)
+
+Para los usuarios que prefieren no usar audio, que se encuentren en entornos ruidosos o que tengan discapacidades auditivas, la interfaz conmuta dinámicamente a un formato de **Chat Conversacional**.
+
+* **Sincronización:** Cada instrucción que el asistente narra a través de la *Web Speech API* se imprime simultáneamente en un globo de chat clásico dentro del panel lateral.
+* **Scroll Automático (Autoscroll):** Al generar un nuevo paso, el panel desplaza la vista automáticamente hacia abajo con una transición suave (`scroll-behavior: smooth`) para mantener el foco en la instrucción actual.
+* **Control de Estado:** Si el usuario silencia el asistente desde la barra de controles, la voz se apaga por completo, pero la lógica de resaltado en pantalla y las instrucciones en el chat siguen avanzando al mismo ritmo que el usuario hace clic.
+
+---
+
+## 🎨 3. Lineamientos de Diseño UI/UX (Estilo Apple / Material 3)
+
+La extensión debe integrarse visualmente de forma limpia en el sistema operativo, transmitiendo confianza y modernidad técnica.
+
+### A. El Panel Lateral (`Side Panel`)
+* **Contenedor Flotante (Apple Minimal):** El layout del chat utiliza tarjetas con esquinas muy redondeadas (`border-radius: 20px`), fondos ligeramente translúcidos (`backdrop-filter: blur(20px)`) y sombras sutiles que emulan la profundidad de macOS e iOS.
+* **Paleta de Colores Dinámica (Material 3):**
+  - **Fondo General:** Gris ultra-claro médico o blanco puro (`#FBFDF8`) para reducir la fatiga visual.
+  - **Color de Acento:** Un morado tecnológico vibrante (`#6750A4`) para los botones de acción principal y burbujas del usuario.
+  - **Burbujas del Asistente:** Gris neutro claro (`#E6E1E5`) con texto de alto contraste.
+
+### B. El Efecto de Resaltado (UI Focus en la Página Web)
+El elemento objetivo que el usuario debe presionar en el sitio externo debe capturar su atención sin romper los flujos de diseño nativos de esa página:
+* **Efecto Pulso (Material 3 Glow):** En lugar de un recuadro estático, aplica un borde exterior animado con un degradado sutil (`outline: 3px solid #6750A4`) combinado con una animación de respiración (*breath animation* por opacidad).
+* **Foco Atenuado (Scrim Overlay):** Para páginas muy caóticas, se proyecta una capa oscura semitransparente sobre todo el sitio web (`background: rgba(0, 0, 0, 0.4)`), recortando mediante la propiedad CSS `clip-path` o un *box-shadow* gigante el área exacta del botón iluminado, guiando los ojos del usuario como una linterna.
+* **Feedback de Clic:** Al presionar el botón resaltado, la animación realiza una transición de salida veloz (`transition: all 0.15s ease-out`) y da paso al siguiente paso.
+
+---
+
+## ⭐ 4. Componente de Engagement y Feedback
+
+Ubicado de forma fija en la sección inferior del panel lateral (o como tarjeta destacada al finalizar un tour interactivo exitoso), este componente impulsa el crecimiento orgánico de la extensión.
+
+### Diseño de la Tarjeta de Calificación
+* **Estética:** Formato de tarjeta limpia (estilo Apple App Store) con un fondo sutilmente diferenciado del chat.
+* **Elementos Visuales:** 
+  - Icono de una estrella animada en el color de acento.
+  - Mensaje conciso: *¿Te ayudó este recorrido? Califícanos en la Chrome Web Store*.
+* **Enlace de Destino:** Un botón estilizado con microinteracción al pasar el cursor (*hover*) que abre directamente la URL de la ficha oficial en una nueva pestaña:
+  `https://google.com`
+
+---
+
+## 📝 5. Configuración Base del `manifest.json`
+
+Para garantizar el correcto funcionamiento de las APIs de inyección, la lectura del DOM en cualquier sitio de internet y el despliegue nativo del panel, se debe estructurar el archivo de configuración con los siguientes parámetros:
+
+```json
+{
+  "manifest_version": 3,
+  "name": "ProOnboarding",
+  "version": "0.1.5",
+  "description": "Onboarding universal para cualquier web: explica la página y te guía paso a paso con audio, chat y resaltado visual.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "sidePanel"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["styles.css"]
+    }
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ]
+}
+```

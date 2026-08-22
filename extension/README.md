@@ -1,4 +1,4 @@
-# ProOnboarding - Extensión Chrome (v0.1.28)
+# ProOnboarding - Extensión Chrome (v0.2.0)
 
 Extensión MV3 que consume la API de ProOnboarding desplegada en Vercel. Analiza la página actual, muestra un resumen y guía un recorrido interactivo con audio (TTS) y resaltado visual de elementos.
 

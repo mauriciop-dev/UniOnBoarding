@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
-import { analyzeWithFallback } from '../lib/ai-provider.js';
+import { resolveIntent } from '../lib/ai-provider.js';
 import { getCachedAnalysis, storeAnalysis } from '../lib/insforge-client.js';
 import { applyCors, isPreflight } from '../lib/cors.js';
+import { rejectWhenLimited } from '../lib/rate-limit.js';
 
 const MAX_HTML_LENGTH = 30000;
 
@@ -14,9 +15,10 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Método no permitido. Usa POST.' });
   }
+  if (rejectWhenLimited(req, res, 'analyze-page', 12)) return;
 
   try {
-    const { url, html_cleaned, lang = 'es', dom_hash } = req.body || {};
+    const { url, html_cleaned, lang = 'es', intent = '', previous_action = '' } = req.body || {};
 
     if (!html_cleaned || typeof html_cleaned !== 'string') {
       return res.status(400).json({ error: 'html_cleaned es requerido (string).' });
@@ -28,7 +30,8 @@ export default async function handler(req, res) {
       });
     }
 
-    const finalHash = dom_hash || crypto.createHash('sha256').update(html_cleaned).digest('hex');
+    const cacheInput = `${html_cleaned}\n\u0000${String(intent).slice(0, 500)}\n\u0000${String(previous_action).slice(0, 500)}`;
+    const finalHash = crypto.createHash('sha256').update(cacheInput).digest('hex');
 
     const cached = await getCachedAnalysis(finalHash, lang);
     if (cached) {
@@ -38,7 +41,11 @@ export default async function handler(req, res) {
       });
     }
 
-    const { result, provider, elapsed_ms, attempts } = await analyzeWithFallback(html_cleaned, lang);
+    const t0 = Date.now();
+    const result = await resolveIntent({ html: html_cleaned, intent, lang, previousAction: previous_action });
+    const provider = 'gemini';
+    const elapsed_ms = Date.now() - t0;
+    const attempts = [];
 
     storeAnalysis({
       url: url || 'unknown',

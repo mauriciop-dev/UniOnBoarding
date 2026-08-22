@@ -79,6 +79,34 @@
   let waitTimer = null;
   let wrongClicks = 0;
   let overlayCleanup = null;
+  let domObserver = null;
+  let domObserverTimer = null;
+  let lastObservedHash = '';
+
+  function notifyDomChanged() {
+    clearTimeout(domObserverTimer);
+    domObserverTimer = setTimeout(() => {
+      const html = cleanDOM(document.body);
+      const hash = computeDomHash(html);
+      if (!hash || hash === lastObservedHash) return;
+      lastObservedHash = hash;
+      chrome.runtime.sendMessage({ type: 'PROOB_DOM_CHANGED', dom_hash: hash }).catch(() => {});
+    }, 500);
+  }
+
+  function startDomObserver() {
+    if (domObserver || !document.body) return;
+    lastObservedHash = computeDomHash(cleanDOM(document.body));
+    domObserver = new MutationObserver(notifyDomChanged);
+    domObserver.observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true });
+  }
+
+  function stopDomObserver() {
+    domObserver?.disconnect();
+    domObserver = null;
+    clearTimeout(domObserverTimer);
+    domObserverTimer = null;
+  }
 
   function escapeClassTokens(str) {
     const esc = (s) => (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(s) : s;
@@ -303,6 +331,18 @@
       } catch (e) {
         sendResponse({ ok: false, error: e.message });
       }
+      return true;
+    }
+
+    if (msg?.type === 'PROOB_START_OBSERVER') {
+      startDomObserver();
+      sendResponse({ ok: true });
+      return true;
+    }
+
+    if (msg?.type === 'PROOB_STOP_OBSERVER') {
+      stopDomObserver();
+      sendResponse({ ok: true });
       return true;
     }
 

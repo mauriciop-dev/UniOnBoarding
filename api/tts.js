@@ -1,5 +1,6 @@
 import { applyCors, isPreflight } from '../lib/cors.js';
 import { synthesize } from '../lib/tts-engines.js';
+import { rejectWhenLimited } from '../lib/rate-limit.js';
 
 export default async function handler(req, res) {
   applyCors(req, res);
@@ -8,6 +9,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Metodo no permitido. Usa POST.' });
   }
+  if (rejectWhenLimited(req, res, 'tts', 30)) return;
 
   try {
     const { text, lang = 'es', engine } = req.body || {};

@@ -7,6 +7,7 @@
 //   provider: 'deepgram_agent' -> POST /v1/auth/grant (Token)
 
 import { applyCors, isPreflight } from '../lib/cors.js';
+import { rejectWhenLimited } from '../lib/rate-limit.js';
 
 const GEMINI_TOKEN_URL = 'https://generativelanguage.googleapis.com/v1beta/auth_tokens';
 const DEEPGRAM_GRANT_URL = 'https://api.deepgram.com/v1/auth/grant';
@@ -77,6 +78,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Metodo no permitido. Usa POST.' });
   }
+  if (rejectWhenLimited(req, res, 'voice-token', 10)) return;
 
   try {
     const { provider = 'gemini_live', model = DEFAULT_LIVE_MODEL } = req.body || {};

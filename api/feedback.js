@@ -1,5 +1,6 @@
 import { applyCors, isPreflight } from '../lib/cors.js';
 import { storeFeedback } from '../lib/insforge-client.js';
+import { rejectWhenLimited } from '../lib/rate-limit.js';
 
 const MAX_COMMENT = 1000;
 
@@ -23,6 +24,7 @@ export default async function handler(req, res) {
   applyCors(req, res);
   if (isPreflight(req)) return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (rejectWhenLimited(req, res, 'feedback', 10)) return;
 
   try {
     const body = parseBody(req.body);

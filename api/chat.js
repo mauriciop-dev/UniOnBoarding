@@ -1,5 +1,6 @@
 import { applyCors, isPreflight } from '../lib/cors.js';
-import { chatWithFallback } from '../lib/chat.js';
+import { chatWithGemini } from '../lib/chat.js';
+import { rejectWhenLimited } from '../lib/rate-limit.js';
 
 const MAX_HISTORY = 8;
 const MAX_CONTEXT = 12000;
@@ -12,6 +13,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Metodo no permitido. Usa POST.' });
   }
+  if (rejectWhenLimited(req, res, 'chat', 30)) return;
 
   try {
     const { message, lang = 'es', pageContext, pageUrl, history } = req.body || {};
@@ -38,7 +40,11 @@ export default async function handler(req, res) {
     }
     parts.push(`USUARIO: ${message}`);
 
-    const { text, provider, elapsed_ms, attempts } = await chatWithFallback(parts.join('\n\n'), lang);
+    const t0 = Date.now();
+    const text = await chatWithGemini(parts.join('\n\n'), lang);
+    const provider = 'gemini';
+    const elapsed_ms = Date.now() - t0;
+    const attempts = [];
 
     return res.status(200).json({ reply: text, provider, elapsed_ms, attempts });
   } catch (err) {

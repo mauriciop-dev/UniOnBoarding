@@ -26,16 +26,16 @@
         <div class="hero">
           <div class="hero-logo">P</div>
           <h1 class="hero-title">Hola, soy tu guía</h1>
-          <p class="lede">Analiza esta página con IA y te explico cómo usarla en 2 minutos.</p>
+          <p class="lede">Dime qué quieres hacer y te indicaré dónde y cómo hacerlo.</p>
         </div>
         <button id="analyze-btn" class="primary">
           <span class="dot"></span>
-          Esta página
+          Preparar página
         </button>
         <div class="features">
-          <div class="feature"><span class="f-ico">🎧</span><span>Audio paso a paso</span></div>
+          <div class="feature"><span class="f-ico">🎧</span><span>Asistencia por voz</span></div>
           <div class="feature"><span class="f-ico">💬</span><span>Preguntas y respuestas</span></div>
-          <div class="feature"><span class="f-ico">🎯</span><span>Resaltado guiado</span></div>
+          <div class="feature"><span class="f-ico">🎯</span><span>Resaltado contextual</span></div>
         </div>
         <div id="page-meta" class="meta"></div>
       </section>
@@ -146,7 +146,6 @@
           </button>
           <select id="voice-provider" class="voice-provider" title="Proveedor del modo voz">
             <option value="gemini_live">Gemini Live (más económico)</option>
-            <option value="deepgram_agent">Deepgram Agent</option>
           </select>
           <span id="voice-status" class="voice-status">Voz desactivada</span>
         </div>
@@ -211,11 +210,11 @@
           Modelo Gemini Live
           <input id="gemini-model-input" type="text" placeholder="gemini-3.1-flash-live-preview" />
         </label>
-        <label>
+        <label hidden>
           Deepgram API key (Agent) — opcional
           <input id="deepgram-key-input" type="password" placeholder="Token... (solo dev)" autocomplete="off" />
         </label>
-        <label>
+        <label hidden>
           Agent Settings JSON (opcional)
           <textarea id="agent-settings-input" rows="4" placeholder='{"type":"Settings","audio":{...}}'></textarea>
         </label>

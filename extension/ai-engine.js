@@ -1,6 +1,6 @@
 // ai-engine.js — Motor de IA (solo cloud API, sin Gemini Nano)
 
-export async function analyzePageWithFallback({ url, html, lang, dom_hash, apiUrl, onStatus }) {
+export async function analyzePageWithFallback({ url, html, lang, dom_hash, intent = '', previous_action = '', apiUrl, onStatus }) {
   onStatus?.('cloud_loading');
 
   const CLOUD_TIMEOUT = 25000;
@@ -11,7 +11,7 @@ export async function analyzePageWithFallback({ url, html, lang, dom_hash, apiUr
     const res = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, html_cleaned: html, lang, dom_hash }),
+      body: JSON.stringify({ url, html_cleaned: html, lang, dom_hash, intent, previous_action }),
       signal: controller.signal,
     });
 

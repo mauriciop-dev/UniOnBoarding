@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   res.status(insforge.ok && anyWorking ? 200 : 503).json({
     status: insforge.ok && anyWorking ? 'ok' : 'degraded',
     service: 'proonboarding-api',
-    version: '0.2.2',
+    version: '0.3.0-gemini-intent',
     timestamp: new Date().toISOString(),
     providers: providers.map(p => ({
       name: p.name,

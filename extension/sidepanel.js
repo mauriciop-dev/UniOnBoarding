@@ -82,6 +82,9 @@ const state = {
   geminiModel: GEMINI_DEFAULT_MODEL,
   deepgramKey: '',
   agentSettings: ''
+  ,currentIntent: ''
+  ,currentTarget: null
+  ,domObserverActive: false
 };
 
 let lastMainView = 'idle';
@@ -182,6 +185,21 @@ async function extractFromPage() {
       throw new Error('No se pudo acceder al contenido de la pagina. Es posible que sea una pagina restringida (chrome://, pdf, etc). Recarga e intenta de nuevo.');
     }
   }
+}
+
+async function preparePageContext() {
+  const extracted = await extractFromPage();
+  state.pageUrl = extracted.url;
+  state.pageTitle = extracted.title;
+  state.pageHtml = extracted.html;
+  state.domHash = extracted.dom_hash;
+  try {
+    const tab = await getActiveTab();
+    await chrome.tabs.sendMessage(tab.id, { type: 'PROOB_START_OBSERVER' });
+    state.domObserverActive = true;
+  } catch (_) { /* observer opcional */ }
+  $('page-meta').textContent = `${state.pageTitle} - ${state.pageUrl}`;
+  return extracted;
 }
 
 async function highlightOnPage(selector, actionType, extra = {}) {
@@ -569,7 +587,7 @@ async function sendChatMessage() {
   addChatBubble('user', text);
   const typing = showChatTyping();
 
-  const endpoint = deriveChatEndpoint(state.apiUrl);
+  const endpoint = state.apiUrl;
   if (!endpoint) {
     typing.remove();
     addChatBubble('assistant', 'No hay URL de API configurada para el chat.');
@@ -580,25 +598,35 @@ async function sendChatMessage() {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), 30000);
   try {
+    if (!state.pageHtml) await preparePageContext();
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
       body: JSON.stringify({
-        message: text,
+        url: state.pageUrl,
+        html_cleaned: state.pageHtml,
         lang: state.lang,
-        pageUrl: state.pageUrl,
-        pageContext: buildChatContext(),
-        history: state.chatHistory
+        intent: text,
+        previous_action: state.currentTarget?.title || ''
       })
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.detail || data.error || `HTTP ${res.status}`);
     state.chatHistory.push({ role: 'user', content: text });
-    state.chatHistory.push({ role: 'assistant', content: data.reply });
+    state.currentIntent = text;
+    state.currentTarget = data.target || null;
+    state.chatHistory.push({ role: 'assistant', content: data.message || 'No encontré una acción concreta.' });
     if (state.chatHistory.length > 24) state.chatHistory = state.chatHistory.slice(-24);
     typing.remove();
-    const bubble = addChatBubble('assistant', data.reply || '(respuesta vacía)');
+    const bubble = addChatBubble('assistant', data.message || '(respuesta vacía)');
+    if (data.target?.selector) {
+      const actionType = data.target.action_type === 'input' ? 'input_required' : data.target.action_type === 'click' ? 'wait_for_click' : 'highlight';
+      await highlightOnPage(data.target.selector, actionType, { label: data.target.title, cta: data.message });
+    }
+    if (Array.isArray(data.suggestions) && data.suggestions.length) {
+      addChatBubble('assistant', `Sugerencias: ${data.suggestions.map(s => s.label).join(' · ')}`);
+    }
     if (data.provider) {
       const meta = document.createElement('div');
       meta.className = 'chat-meta';
@@ -764,32 +792,9 @@ async function toggleVoice() {
 async function analyzeThisPage() {
   try {
     $('analyze-btn').disabled = true;
-    showView('loading');
-    setLoadingText('Extrayendo DOM de la pagina...');
-    const extracted = await extractFromPage();
-    state.pageUrl = extracted.url;
-    state.pageTitle = extracted.title;
-    state.pageHtml = extracted.html;
-    state.domHash = extracted.dom_hash;
-
-    $('page-meta').textContent = `${state.pageTitle} - ${state.pageUrl}`;
-
-    const locallyCached = await getLocalAnalysis(state.domHash, state.lang);
-    if (locallyCached) {
-      renderSummary(locallyCached, { ...locallyCached._meta, cached: true, source: 'local-cache', provider: locallyCached._meta?.provider || 'cache' });
-      return;
-    }
-
-    const { data, meta } = await analyzePageWithFallback({
-      url: state.pageUrl,
-      html: state.pageHtml,
-      lang: state.lang,
-      dom_hash: state.domHash,
-      apiUrl: state.apiUrl,
-      onStatus: (s) => setLoadingText(STATUS_MESSAGES[s] || 'Consultando la IA...'),
-    });
-    setLocalAnalysis(state.domHash, state.lang, data);
-    renderSummary(data, { ...data._meta, ...meta });
+    await preparePageContext();
+    openChat();
+    addChatBubble('assistant', 'Ya estoy listo. Dime qué quieres hacer en esta página o elige una sugerencia.');
   } catch (err) {
     $('error-text').textContent = err.message || String(err);
     showView('error');
@@ -798,11 +803,15 @@ async function analyzeThisPage() {
   }
 }
 
-function startTour() {
-  if (!state.tourSteps.length) return;
-  showView('tour');
-  renderTourStep(0);
-}
+function startTour() { openChat(); }
+
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg?.type !== 'PROOB_DOM_CHANGED' || !state.currentTarget) return;
+  // El DOM cambió después de una acción; el siguiente mensaje usará un
+  // snapshot fresco en lugar de reutilizar el contexto anterior.
+  state.pageHtml = '';
+  addChatBubble('assistant', 'Detecté un cambio en la página. ¿Qué quieres hacer ahora?');
+});
 
 function wire() {
   $('analyze-btn').addEventListener('click', analyzeThisPage);
