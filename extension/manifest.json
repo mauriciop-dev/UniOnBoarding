@@ -21,7 +21,8 @@
     "offscreen"
   ],
   "host_permissions": [
-    "https://uni-on-boarding-idcs.vercel.app/*"
+    "https://uni-on-boarding-idcs.vercel.app/*",
+    "http://localhost:3000/*"
   ],
   "web_accessible_resources": [
     {
