@@ -605,10 +605,11 @@ export class RealtimeVoiceSession {
 
   _onUserText(t, final) {
     if (t) this._lastUserPartial = t;
+    if (t && !final) this._cb.onUserText?.(t.trim(), false);
     if (final) {
       const txt = t || this._lastUserPartial;
       this._lastUserPartial = '';
-      if (txt && txt.trim()) this._cb.onUserText?.(txt.trim());
+      if (txt && txt.trim()) this._cb.onUserText?.(txt.trim(), final);
     }
   }
 

@@ -85,6 +85,7 @@ const state = {
   ,currentIntent: ''
   ,currentTarget: null
   ,domObserverActive: false
+  ,resolvingNext: false
 };
 
 let lastMainView = 'idle';
@@ -622,7 +623,8 @@ async function sendChatMessage() {
     const bubble = addChatBubble('assistant', data.message || '(respuesta vacía)');
     if (data.target?.selector) {
       const actionType = data.target.action_type === 'input' ? 'input_required' : data.target.action_type === 'click' ? 'wait_for_click' : 'highlight';
-      await highlightOnPage(data.target.selector, actionType, { label: data.target.title, cta: data.message });
+      const actionResult = await highlightOnPage(data.target.selector, actionType, { label: data.target.title, cta: data.message });
+      if (actionResult?.completed) await resolveNextAction();
     }
     if (Array.isArray(data.suggestions) && data.suggestions.length) {
       addChatBubble('assistant', `Sugerencias: ${data.suggestions.map(s => s.label).join(' · ')}`);
@@ -643,6 +645,39 @@ async function sendChatMessage() {
     clearTimeout(id);
     $('chat-send').disabled = false;
     input.focus();
+  }
+}
+
+async function resolveNextAction() {
+  if (!state.currentIntent || state.resolvingNext) return;
+  state.resolvingNext = true;
+  try {
+    state.pageHtml = '';
+    await preparePageContext();
+    const res = await fetch(state.apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: state.pageUrl,
+        html_cleaned: state.pageHtml,
+        lang: state.lang,
+        intent: state.currentIntent,
+        previous_action: state.currentTarget?.title || ''
+      }),
+      signal: AbortSignal.timeout(30000)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    state.currentTarget = data.target || null;
+    addChatBubble('assistant', data.message || 'La acción se completó.');
+    if (data.target?.selector) {
+      const actionType = data.target.action_type === 'input' ? 'input_required' : data.target.action_type === 'click' ? 'wait_for_click' : 'highlight';
+      await highlightOnPage(data.target.selector, actionType, { label: data.target.title, cta: data.message });
+    }
+  } catch (err) {
+    addChatBubble('assistant', `La acción se completó. Dime qué quieres hacer ahora. (${err.message || 'sin contexto nuevo'})`);
+  } finally {
+    state.resolvingNext = false;
   }
 }
 
@@ -697,6 +732,17 @@ function buildVoicePrompt() {
 }
 
 let voiceAssistantEl = null;
+let voiceUserEl = null;
+
+function appendVoiceUser(txt) {
+  if (!txt) return;
+  if (!voiceUserEl) voiceUserEl = addChatBubble('user', txt);
+  else {
+    const body = voiceUserEl.querySelector('.chat-body');
+    if (body) body.textContent = txt;
+    $('chat-messages').scrollTop = $('chat-messages').scrollHeight;
+  }
+}
 
 function appendVoiceAssistant(txt, final) {
   if (!voiceAssistantEl) {
@@ -740,7 +786,10 @@ async function startVoice() {
     language: state.lang,
     prompt,
     agentSettings,
-    onUserText: (txt) => addChatBubble('user', txt),
+    onUserText: (txt, final) => {
+      appendVoiceUser(txt);
+      if (final) voiceUserEl = null;
+    },
     onAssistantText: (txt, final) => appendVoiceAssistant(txt, final),
     onTurnComplete: () => setVoiceStatus('Voz activa', 'live'),
     onStatus: (s) => mapVoiceStatus(s),
@@ -810,14 +859,13 @@ chrome.runtime.onMessage.addListener((msg) => {
   // El DOM cambió después de una acción; el siguiente mensaje usará un
   // snapshot fresco en lugar de reutilizar el contexto anterior.
   state.pageHtml = '';
-  addChatBubble('assistant', 'Detecté un cambio en la página. ¿Qué quieres hacer ahora?');
+  resolveNextAction();
 });
 
 function wire() {
   $('analyze-btn').addEventListener('click', analyzeThisPage);
   $('start-tour-btn').addEventListener('click', startTour);
   $('ask-btn').addEventListener('click', openChat);
-  $('chat-back-btn').addEventListener('click', () => showView('summary'));
   $('chat-send').addEventListener('click', sendChatMessage);
   $('chat-input').addEventListener('input', () => {
     $('chat-send').disabled = !$('chat-input').value.trim();

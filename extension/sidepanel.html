@@ -132,7 +132,7 @@
       <!-- Vista chat -->
       <section id="view-chat" class="view">
         <div class="chat-top">
-          <button id="chat-back-btn" class="ghost">Resumen</button>
+          <span class="chat-title-spacer" aria-hidden="true"></span>
           <span class="chat-title">Pregunta sobre la pagina</span>
         </div>
         <details id="chat-context" class="chat-context" hidden>
@@ -144,7 +144,7 @@
             <span id="voice-btn-ico">🎙️</span>
             <span id="voice-btn-label">Hablar</span>
           </button>
-          <select id="voice-provider" class="voice-provider" title="Proveedor del modo voz">
+          <select id="voice-provider" class="voice-provider" title="Proveedor del modo voz" hidden>
             <option value="gemini_live">Gemini Live (más económico)</option>
           </select>
           <span id="voice-status" class="voice-status">Voz desactivada</span>
