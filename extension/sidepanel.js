@@ -887,5 +887,9 @@ function wire() {
   configureTts();
   updateLayerChip(tts.getActiveLayer());
   wire();
-  showView('idle');
+  showView('chat');
+  openChat();
+  preparePageContext().catch(() => {
+    addChatBubble('assistant', 'No pude leer esta página todavía. Escribe tu pregunta y lo intentaré de nuevo.');
+  });
 })();
