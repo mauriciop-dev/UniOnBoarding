@@ -625,6 +625,11 @@ export class RealtimeVoiceSession {
       this._lastAssistantPartial = '';
       return;
     }
+    if (this._lastUserPartial) {
+      const userText = this._lastUserPartial;
+      this._lastUserPartial = '';
+      this._cb.onUserText?.(userText.trim(), true);
+    }
     const txt = this._lastAssistantPartial;
     this._lastAssistantPartial = '';
     if (txt && txt.trim()) this._cb.onAssistantText?.(txt.trim(), true);

@@ -1,12 +1,12 @@
 /* Overlay que resalta el elemento actual del tour */
 .proob-highlight {
-  outline: 3px solid #7c3aed !important;
-  outline-offset: 4px !important;
-  box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.45) !important;
+  outline: 4px solid #8b5cf6 !important;
+  outline-offset: 5px !important;
+  box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.34) !important;
   position: relative !important;
   z-index: 2147483646 !important;
   border-radius: 8px !important;
-  transition: outline-color 0.2s ease, box-shadow 0.2s ease;
+  transition: outline-color 0.15s ease;
 }
 
 .proob-highlight::after {

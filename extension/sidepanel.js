@@ -769,7 +769,7 @@ function buildVoicePrompt() {
     `El usuario navega por: ${pa.detected_platform_name || 'una página web'}.`
   ];
   if (ctx) lines.push(`Contexto de la página:\n${ctx}`);
-  lines.push('Reglas: responde de forma breve, natural para voz y sin listas largas. Si pide que le muestres algo, di que lo señalarás en pantalla; no inventes ni parafrasees nombres de botones.');
+  lines.push('Reglas: responde de forma breve, natural para voz y sin listas largas. Si pide que le muestres, expliques o señales algo, la guía visual lo marcará automáticamente en la página: di "te lo señalo en pantalla" y nunca le digas que debe escribirlo en el chat. No inventes ni parafrasees nombres de botones.');
   return lines.join('\n\n');
 }
 
@@ -899,10 +899,9 @@ function startTour() { openChat(); }
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg?.type !== 'PROOB_DOM_CHANGED' || !state.currentTarget) return;
-  // El DOM cambió después de una acción; el siguiente mensaje usará un
-  // snapshot fresco en lugar de reutilizar el contexto anterior.
-  state.pageHtml = '';
-  resolveNextAction();
+  // Un cambio del DOM no significa necesariamente que la acción terminó.
+  // El resaltado solo avanza cuando el listener del elemento confirma el
+  // clic/input; así permanece visible mientras Gemini Live conversa.
 });
 
 function wire() {
