@@ -681,6 +681,48 @@ async function resolveNextAction() {
   }
 }
 
+// El canal de voz no usa el chat para mostrar transcripciones, pero sí debe
+// pasar la intención final por el mismo resolvedor visual que el texto.
+async function resolveVisualIntent(intent) {
+  if (!intent || state.resolvingVoiceIntent) return;
+  state.resolvingVoiceIntent = true;
+  try {
+    if (!state.pageHtml) await preparePageContext();
+    state.currentIntent = intent;
+    const res = await fetch(state.apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: state.pageUrl,
+        html_cleaned: state.pageHtml,
+        lang: state.lang,
+        intent,
+        previous_action: state.currentTarget?.title || ''
+      }),
+      signal: AbortSignal.timeout(30000)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    state.currentTarget = data.target || null;
+    if (!data.target?.selector) {
+      setVoiceStatus('Sin objetivo visual', 'error');
+      return;
+    }
+    const actionType = data.target.action_type === 'input' ? 'input_required' : data.target.action_type === 'click' ? 'wait_for_click' : 'highlight';
+    setVoiceStatus('Mira la pantalla', 'live');
+    const actionResult = await highlightOnPage(data.target.selector, actionType, {
+      label: data.target.title,
+      cta: data.message
+    });
+    if (actionResult?.completed) await resolveNextAction();
+  } catch (err) {
+    setVoiceStatus('Guía visual no disponible', 'error');
+    console.warn('[voice-visual] no se pudo resolver la intención:', err);
+  } finally {
+    state.resolvingVoiceIntent = false;
+  }
+}
+
 const STATUS_MESSAGES = {
   cloud_loading: 'Consultando API cloud...',
 };
@@ -727,7 +769,7 @@ function buildVoicePrompt() {
     `El usuario navega por: ${pa.detected_platform_name || 'una página web'}.`
   ];
   if (ctx) lines.push(`Contexto de la página:\n${ctx}`);
-  lines.push('Reglas: responde de forma breve (una idea), natural para voz, sin listas largas.');
+  lines.push('Reglas: responde de forma breve, natural para voz y sin listas largas. Si pide que le muestres algo, di que lo señalarás en pantalla; no inventes ni parafrasees nombres de botones.');
   return lines.join('\n\n');
 }
 
@@ -788,7 +830,9 @@ async function startVoice() {
     agentSettings,
     // El modo voz es audio-first: no duplica la conversación en el historial
     // del chat. El texto escrito conserva su propio hilo separado.
-    onUserText: () => {},
+    onUserText: (txt, final) => {
+      if (final) void resolveVisualIntent(txt);
+    },
     onAssistantText: () => {},
     onTurnComplete: () => setVoiceStatus('Voz activa', 'live'),
     onStatus: (s) => mapVoiceStatus(s),
