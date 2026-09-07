@@ -69,8 +69,43 @@
     return (h >>> 0).toString(16);
   }
 
-  const AVATAR_ICONS = { bot: '🤖', man: '👨\u200D💻', woman: '👩\u200D💻' };
-  const STEP_WAIT_MS = 25000;
+  // Mapa de Promises pendientes para waitForUserClick: selector -> { resolve, timeoutId }
+  const clickWaiters = new Map();
+
+  // Helper: selector robusto para identificar elementos
+  function getRobustSelector(el) {
+    if (el.id) return `#${el.id}`;
+    if (el.dataset.testid) return `[data-testid="${el.dataset.testid}"]`;
+    if (el.name) return `[name="${el.name}"]`;
+    const classes = Array.from(el.classList).filter(c => !c.startsWith('proob-')).join('.');
+    return classes ? `${el.tagName.toLowerCase()}.${classes}` : el.tagName.toLowerCase();
+  }
+
+  // Helper: XPath para identificación precisa
+  function getXPath(el) {
+    if (el.id) return `//*[@id="${el.id}"]`;
+    const parts = [];
+    while (el && el.nodeType === Node.ELEMENT_NODE) {
+      let idx = 1;
+      let sibling = el.previousElementSibling;
+      while (sibling) { if (sibling.tagName === el.tagName) idx++; sibling = sibling.previousElementSibling; }
+      parts.unshift(`${el.tagName.toLowerCase()}[${idx}]`);
+      el = el.parentElement;
+    }
+    return '/' + parts.join('/');
+  }
+
+  // Listener global de clics del usuario (capture phase para atrapar antes que otros handlers)
+  document.addEventListener('click', (e) => {
+    const target = e.target;
+    const selector = getRobustSelector(target);
+    if (clickWaiters.has(selector)) {
+      const { resolve, timeoutId } = clickWaiters.get(selector);
+      clearTimeout(timeoutId);
+      clickWaiters.delete(selector);
+      resolve({ success: true, selector, xpath: getXPath(target), text: target.innerText?.slice(0, 100) });
+    }
+  }, true);
 
   let currentHighlighted = null;
   let pendingResolve = null;
@@ -382,6 +417,32 @@
         pendingResolve = null;
       }
       sendResponse({ ok: true });
+      return true;
+    }
+
+    if (msg?.type === 'PROOB_WAIT_CLICK') {
+      const { selector, timeoutMs = 30000 } = msg;
+      if (clickWaiters.has(selector)) {
+        sendResponse({ success: false, error: 'Ya hay un waiter para este selector' });
+        return true;
+      }
+      const timeoutId = setTimeout(() => {
+        clickWaiters.delete(selector);
+        sendResponse({ success: false, error: 'Timeout esperando clic', selector });
+      }, timeoutMs);
+      clickWaiters.set(selector, { resolve: sendResponse, timeoutId });
+      return true; // async response
+    }
+
+    if (msg?.type === 'PROOB_CLICK_ELEMENT') {
+      const { selector } = msg;
+      const el = document.querySelector(selector);
+      if (!el) { sendResponse({ success: false, error: 'Elemento no encontrado', selector }); return true; }
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => {
+        el.click();
+        sendResponse({ success: true, selector });
+      }, 300);
       return true;
     }
   });

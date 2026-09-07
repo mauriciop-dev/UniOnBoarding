@@ -10,18 +10,33 @@ extension/
 ├── background.js              # Service worker: abre el side panel al hacer clic
 ├── sidepanel.html             # UI principal del panel lateral
 ├── sidepanel.css
-├── sidepanel.js               # Lógica UI, fetch al API, chat, tour
+├── sidepanel.js               # Lógica UI, fetch al API, chat, tour, registro WebMCP
 ├── ai-engine.js               # Cliente del API de análisis (cloud)
 ├── tts-provider.js            # Motor de voz unificado (cloud TTS / Web Speech local)
 ├── realtime-voice.js          # Modo Voz: Gemini Live + Deepgram Agent (WebSocket)
+├── tour-engine.js             # Motor de tours guiados (v0.2.0) con InstructionQueue
 ├── voice-worklet.js           # AudioWorklet: captura del mic (PCM16 16 kHz); la reproducción va por AudioBufferSourceNode
-├── content.js                 # Inyectado en cada página: limpieza DOM + overlay + flujo condicional
-├── content.css                # Estilos del resaltado, etiquetas, ayuda y toast
+├── content.js                 # Inyectado en cada página: limpieza DOM + overlay + waitForUserClick
+├── content.css                # Estilos del resaltado, etiquetas, ayuda, toast y WebMCP highlight overlay
 ├── icons/                     # icon16, icon48, icon128
 ├── scripts/
 │   └── generate-icons.mjs     # Regenera los iconos placeholder
 └── README.md
 ```
+
+## WebMCP (v0.2.0)
+
+La extension registra 7 herramientas WebMCP que cualquier agente WebMCP-aware puede invocar:
+
+- `analyzePage` — analiza la pagina actual via `/api/analyze-page`
+- `speakText` — TTS via Gemini Live con cola sincronizada
+- `highlightElement` — resalta un elemento con overlay visual + TTS opcional
+- `waitForUserClick` — espera clic del usuario (timeout configurable)
+- `clickElement` — clic programatico (Chrome pide confirmacion al usuario)
+- `startTour` — orquesta tour guiado completo (highlight + voz + espera de clics)
+- `getPageTools` — descubre herramientas WebMCP que expone el sitio actual
+
+**Requisito**: WebMCP requiere Chrome Canary/Dev con Origin Trial habilitado (ver https://developer.chrome.com/origintrials/) o Chrome estable cuando se active por defecto.
 
 ## Cargar la extensión en Chrome (modo desarrollador)
 

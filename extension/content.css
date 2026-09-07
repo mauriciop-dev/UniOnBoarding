@@ -24,6 +24,36 @@
   50% { opacity: 1; }
 }
 
+/* --- TourEngine: Highlight Overlay (nuevo sistema WebMCP) --- */
+.proob-highlight-overlay {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  pointer-events: none; z-index: 2147483647;
+  --target-top: 0; --target-left: 0; --target-width: 100px; --target-height: 40px;
+}
+.proob-spotlight {
+  position: absolute;
+  top: var(--target-top); left: var(--target-left);
+  width: var(--target-width); height: var(--target-height);
+  border: 3px solid #4285f4; border-radius: 6px;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,0.5), 0 0 20px rgba(66,133,244,0.6);
+  animation: proob-pulse 1.5s infinite;
+}
+.proob-tooltip {
+  position: absolute;
+  top: calc(var(--target-top) - 60px); left: var(--target-left);
+  background: #1a1a1a; color: white; padding: 8px 12px;
+  border-radius: 6px; font-size: 14px; max-width: 280px; white-space: normal;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+.proob-pulse {
+  position: absolute;
+  top: var(--target-top); left: var(--target-left);
+  width: var(--target-width); height: var(--target-height);
+  border: 2px solid #4285f4; border-radius: 6px;
+  animation: proob-ring 2s infinite;
+}
+@keyframes proob-ring { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(1.3); opacity: 0; } }
+
 .proob-toast {
   position: fixed;
   bottom: 24px;

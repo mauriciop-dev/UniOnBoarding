@@ -1,4 +1,4 @@
-// realtime-voice.js — Modo Voz de ProOnboarding.
+﻿// realtime-voice.js — Modo Voz de ProOnboarding.
 //
 // Sesion de voz bidireccional (hablar y escuchar) con dos proveedores:
 //   L1 gemini_live    : Gemini Live API directo (WebSocket BidiGenerateContent,
@@ -620,7 +620,7 @@ export class RealtimeVoiceSession {
     }
   }
 
-  _onTurnComplete(why) {
+_onTurnComplete(why) {
     if (why === 'interrupted') {
       this._lastAssistantPartial = '';
       return;
@@ -634,6 +634,8 @@ export class RealtimeVoiceSession {
     this._lastAssistantPartial = '';
     if (txt && txt.trim()) this._cb.onAssistantText?.(txt.trim(), true);
     this._cb.onTurnComplete?.();
+    // Emitir evento cuando termina el turno (audio completado)
+    window.dispatchEvent(new CustomEvent('proob-audio-end'));
   }
 
   _onProviderClose(info) {

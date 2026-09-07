@@ -3,6 +3,7 @@
 import { analyzePageWithFallback } from './ai-engine.js';
 import { TTSProvider, TTS_LAYERS } from './tts-provider.js';
 import { RealtimeVoiceSession, REALTIME_PROVIDERS, GEMINI_DEFAULT_MODEL } from './realtime-voice.js';
+import { TourEngine } from './tour-engine.js';
 
 const DEFAULT_API_URL = 'https://uni-on-boarding-idcs.vercel.app/api/analyze-page';
 const STORAGE_KEYS = {
@@ -962,11 +963,144 @@ function wire() {
   if (voiceBtn) voiceBtn.addEventListener('click', toggleVoice);
 }
 
+// --- WebMCP Tools Registration ----------------------------------------------
+function registerWebMCPTools() {
+  if (!document.modelContext) {
+    console.warn('[ProOnboarding] WebMCP no disponible (requiere Chrome Canary/Dev + Origin Trial)');
+    return;
+  }
+
+  // 1. analyzePage - wrapper a /api/analyze-page
+  document.modelContext.registerTool({
+    name: 'analyzePage',
+    title: 'Analizar página para onboarding',
+    description: 'Devuelve selectores, acciones posibles y guía de pasos',
+    inputSchema: { type: 'object', properties: { url: { type: 'string', format: 'uri' } }, required: ['url'] },
+    annotations: { readOnlyHint: true },
+    execute: async ({ url }) => {
+      const res = await fetch(state.apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      });
+      return res.json();
+    }
+  });
+
+  // 2. speakText - usa Gemini Live TTS con cola sincronizada (o fallback Web Speech API)
+  document.modelContext.registerTool({
+    name: 'speakText',
+    title: 'Leer instrucción en voz alta',
+    description: 'TTS cloud con fallback local, sincronizado con highlights',
+    inputSchema: { type: 'object', properties: { text: { type: 'string' }, lang: { type: 'string', default: 'es' }, selector: { type: 'string' } }, required: ['text'] },
+    annotations: { readOnlyHint: true },
+    execute: async ({ text, lang, selector }) => {
+      // Usar cola sincronizada para coordinar highlight + voz
+      return window.proobInstructionQueue?.enqueue({ text, lang, selector }) ?? { success: false, error: 'Cola no disponible' };
+    }
+  });
+
+  // 3. highlightElement - overlay visual + TTS opcional
+  document.modelContext.registerTool({
+    name: 'highlightElement',
+    title: 'Resaltar elemento en pantalla',
+    description: 'Pone un foco visual y opcionalmente habla la instrucción',
+    inputSchema: { type: 'object', properties: { selector: { type: 'string' }, instruction: { type: 'string' }, speak: { type: 'boolean', default: true } }, required: ['selector'] },
+    annotations: { readOnlyHint: true },
+    execute: async ({ selector, instruction, speak }) => {
+      const tab = await getActiveTab();
+      if (!tab?.id) return { ok: false, error: 'No hay pestaña activa' };
+      const hl = await chrome.tabs.sendMessage(tab.id, {
+        type: 'PROOB_HIGHLIGHT',
+        payload: { selector, action_type: 'highlight', label: instruction, cta: '', avatar: state.avatar }
+      });
+      if (speak && instruction && state.voiceSession) {
+        await state.voiceSession.speakText(instruction);
+      }
+      return hl || { ok: false };
+    }
+  });
+
+  // 4. waitForUserClick - espera clic del usuario (delegado a content.js)
+  document.modelContext.registerTool({
+    name: 'waitForUserClick',
+    title: 'Esperar clic del usuario',
+    description: 'Pausa hasta que el usuario cliquee el selector dado (timeout configurable)',
+    inputSchema: { type: 'object', properties: { selector: { type: 'string' }, timeoutMs: { type: 'number', default: 30000 } }, required: ['selector'] },
+    annotations: { readOnlyHint: true },
+    execute: async ({ selector, timeoutMs }) => {
+      return chrome.runtime.sendMessage({ type: 'PROOB_WAIT_CLICK', selector, timeoutMs });
+    }
+  });
+
+  // 5. clickElement - clic programático (Chrome pide confirmación al usuario)
+  document.modelContext.registerTool({
+    name: 'clickElement',
+    title: 'Clicar elemento',
+    description: 'Ejecuta clic real en el selector (Chrome pide confirmación al usuario)',
+    inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] },
+    annotations: { readOnlyHint: false },
+    execute: async ({ selector }) => {
+      return chrome.runtime.sendMessage({ type: 'PROOB_CLICK_ELEMENT', selector });
+    }
+  });
+
+  // 6. startTour - orquesta tour completo
+  document.modelContext.registerTool({
+    name: 'startTour',
+    title: 'Iniciar tour de onboarding',
+    description: 'Orquesta highlights + voz + espera de clics paso a paso',
+    inputSchema: { type: 'object', properties: { tourId: { type: 'string' }, context: { type: 'object' } }, required: ['tourId'] },
+    annotations: { readOnlyHint: true },
+    execute: async ({ tourId, context }) => {
+      if (!window.proobTour) window.proobTour = new TourEngine();
+      return window.proobTour.start(tourId, context);
+    }
+  });
+
+  // 7. getPageTools - descubre herramientas WebMCP del sitio actual
+  document.modelContext.registerTool({
+    name: 'getPageTools',
+    title: 'Listar herramientas WebMCP de la página',
+    description: 'Descubre herramientas que expone el sitio (addToCart, etc.)',
+    inputSchema: { type: 'object', properties: {} },
+    annotations: { readOnlyHint: true },
+    execute: async () => {
+      if (!navigator.aiTools) return { tools: [] };
+      const { tools } = await navigator.aiTools.getTools({ origin: location.origin });
+      return { tools };
+    }
+  });
+
+  console.log('[ProOnboarding] WebMCP tools registradas (7)');
+}
+
+// Exponer speakText en la sesión de voz para uso por WebMCP
+RealtimeVoiceSession.prototype.speakText = async function(text, lang = 'es') {
+  if (!this._provider || !this._running) {
+    // Fallback Web Speech API
+    return new Promise((resolve) => {
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = lang.startsWith('es') ? 'es-ES' : 'en-US';
+      utter.onend = () => resolve({ success: true, fallback: true });
+      utter.onerror = () => resolve({ success: false, error: 'TTS falló' });
+      speechSynthesis.speak(utter);
+    });
+  }
+  // Enviar como realtimeInput.text (Gemini Live acepta texto para TTS)
+  if (this._provider.ws && this._provider.ws.readyState === 1) {
+    this._provider.ws.send(JSON.stringify({ realtimeInput: { text } }));
+    return { success: true, via: 'gemini-live' };
+  }
+  return { success: false, error: 'WS no conectado' };
+};
+
 (async function init() {
   await loadSettings();
   configureTts();
   updateLayerChip(tts.getActiveLayer());
   wire();
+  registerWebMCPTools(); // Registrar herramientas WebMCP
   showView('chat');
   openChat();
   preparePageContext().catch(() => {

@@ -1,5 +1,24 @@
 # Changelog / Bitacora de problemas y soluciones
 
+## 0.2.0 — Integracion WebMCP: herramientas expuestas para agentes IA
+
+- **Nuevo**: la extension registra 7 herramientas WebMCP (`document.modelContext.registerTool`) que cualquier agente WebMCP-aware puede invocar:
+  - `analyzePage` — analiza la pagina actual
+  - `speakText` — TTS via Gemini Live con cola sincronizada
+  - `highlightElement` — resalta un elemento en pantalla
+  - `waitForUserClick` — espera clic del usuario (timeout configurable)
+  - `clickElement` — clic programatico (Chrome pide confirmacion)
+  - `startTour` — orquesta tour guiado completo
+  - `getPageTools` — descubre herramientas WebMCP del sitio actual
+- **Nuevo archivo `extension/tour-engine.js`**: motor de tours con maquina de estados (highlight + speak + wait + action), cola de instrucciones sincronizada (`InstructionQueue`) para coordinar voz de Gemini Live con highlights visuales sin solapamiento.
+- **Nuevo handler en `content.js`**: `PROOB_WAIT_CLICK` y `PROOB_CLICK_ELEMENT` con selector robusto (id > data-testid > name > xpath), `waitForUserClick` resuelve Promise al detectar clic del usuario.
+- **Nuevo evento en `realtime-voice.js`**: `window.dispatchEvent(new CustomEvent('proob-audio-end'))` cuando el turno de Gemini Live termina, consumido por `InstructionQueue` para saber cuando avanzar al siguiente paso del tour.
+- **Estilos nuevos en `content.css`**: `.proob-highlight-overlay` con spotlight, tooltip y pulse animation para los tours WebMCP.
+- Bump 0.2.0 (manifest).
+- **Limitacion**: `document.modelContext` solo esta disponible en Chrome Canary/Dev con Origin Trial habilitado (`https://developer.chrome.com/origintrials/`) o Chrome estable cuando WebMCP se active por defecto (TBD 2025/26).
+
+---
+
 ## 0.1.28 — Modo Voz confirmado en vivo + limpieza de logs y diagnostico
 
 - **CONFIRMADO EN VIVO por el usuario**: habla, Gemini escucha y responde con audio, y se oye por el parlante (`play: primer buffer programado`). FASE 5 completa de punta a punta.
