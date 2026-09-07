@@ -3,7 +3,8 @@
 > **Antes de subir**: en la consola del Store, crea el item con el **mismo ID** que
 > el manifest si ya tenes un item publicado (para no romper el enlace "Calificar en
 > Chrome Web Store" que usa la extension). La version empaquetada sale de
-> `node scripts/package-store.mjs` → `proonboarding-<version>.zip`.
+> `node scripts/package-store.mjs` → `proonboarding-<version>.zip` (v0.2.0 con
+> integracion WebMCP).
 
 ---
 
@@ -32,12 +33,13 @@ ProOnboarding convierte cualquier pagina web en una visita guiada. Abre el panel
 • RECORRIDO INTERACTIVO: pasos numerados que resaltan cada elemento de la interfaz mientras un narrador (TTS) te guia. Avisa si necesitas ayuda y continua exactamente donde quedaste.
 • AUDIO EN TODO MOMENTO: narracion de cada paso con voz de alta calidad en la nube y fallback a voces locales sin conexion.
 • CHAT: preguntale al asistente sobre la pagina con contexto incluido (funciona por texto o por voz en tiempo real).
-• MODO VOZ EN TIEMPO REAL: mantene presionado "Hablar" y conversa con el asistente de voz; sus respuestas se escuchan al instante.
+• MODO VOZ EN TIEMPO REAL: conversa con el asistente de voz; sus respuestas se escuchan al instante.
+• INTEGRACION CON AGENTES IA (WebMCP): expone herramientas estandar para que Gemini en Chrome u otros agentes IA descubran y usen tus capacidades (resumir, resaltar, esperar clics, iniciar tours).
 • MULTI-IDIOMA: es, en, pt, fr.
 
 Es ideal para: soporte tecnico, productos SaaS, tutoriales rapidos, accesibilidad y onboarding de usuarios en tu propia web.
 
-Privacidad: la extension se activa solo cuando la usas. El analisis de la pagina, el chat y la voz se procesan contra el backend que configures (por defecto HTTPS). El audio del microfono se envia en tiempo real solo mientras mantenes presionado "Hablar" y no se almacena. No hay rastreadores, analytics ni venta de datos.
+Privacidad: la extension se activa solo cuando la usas. El analisis de la pagina, el chat y la voz se procesan contra el backend que configures (por defecto HTTPS). El audio del microfono se envia en tiempo real solo mientras mantienes presionado "Hablar" y no se almacena. No hay rastreadores, analytics ni venta de datos.
 ```
 
 ## Categoria sugerida
@@ -81,3 +83,9 @@ El formulario pide explicar cada permiso. Usa estas frases:
 - Pagina de soporte: `https://github.com/mauriciop-dev/UniOnBoarding/issues`
 - Politica de privacidad: `PRIVACY.md` (subir el archivo o pegar el texto en la consola).
 - Sitio: `https://github.com/mauriciop-dev/UniOnBoarding`
+
+## Novedades v0.2.0 (para la seccion "What's new" de la Store)
+
+- **WebMCP**: la extension ahora expone 7 herramientas estandar (analyzePage, speakText, highlightElement, waitForUserClick, clickElement, startTour, getPageTools) que agentes IA compatibles (Gemini en Chrome, etc.) pueden invocar para automatizar onboarding.
+- **Tour Engine**: motor de tours con cola de instrucciones sincronizada, asegurando que la voz de Gemini Live y los resaltados visuales no se solapen.
+- **Mejor deteccion de clics**: `waitForUserClick` ahora detecta el clic real del usuario con selector robusto (id > data-testid > xpath) y timeout configurable.

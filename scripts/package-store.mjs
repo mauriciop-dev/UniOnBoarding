@@ -25,6 +25,7 @@ const RUNTIME_FILES = [
   'ai-engine.js',
   'tts-provider.js',
   'realtime-voice.js',
+  'tour-engine.js',
   'voice-worklet.js',
   'offscreen.html',
   'offscreen.js',
